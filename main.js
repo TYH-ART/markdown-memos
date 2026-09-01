@@ -619,7 +619,7 @@ var ObsidianMemosSettingTab = class extends import_obsidian4.PluginSettingTab {
   }
   display() {
     this.containerEl.empty();
-    new import_obsidian4.Setting(this.containerEl).setName("Settings").setHeading();
+    new import_obsidian4.Setting(this.containerEl).setName("General").setHeading();
     new import_obsidian4.Setting(this.containerEl).setName("Memo \u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u65B0 Memo \u5C06\u5199\u5165\u6B64\u76EE\u5F55\u3002\u4FEE\u6539\u8DEF\u5F84\u4E0D\u4F1A\u79FB\u52A8\u6216\u5220\u9664\u65E7\u76EE\u5F55\u4E2D\u7684\u6587\u4EF6\u3002").addText((text) => {
       text.setPlaceholder("Memos").setValue(this.plugin.settings.memoFolder);
       text.onChange(async (value) => {

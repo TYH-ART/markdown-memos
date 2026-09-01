@@ -12,7 +12,7 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
 
   public override display(): void {
     this.containerEl.empty();
-    new Setting(this.containerEl).setName("Settings").setHeading();
+    new Setting(this.containerEl).setName("General").setHeading();
 
     new Setting(this.containerEl)
       .setName("Memo 保存文件夹")
