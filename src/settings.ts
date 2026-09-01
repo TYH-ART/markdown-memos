@@ -1,4 +1,5 @@
 import { App, PluginSettingTab, Setting } from "obsidian";
+import type { SettingDefinitionItem } from "obsidian";
 import type ObsidianMemosPlugin from "./main";
 import { normalizeMemoFolder } from "./utils";
 
@@ -10,9 +11,100 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
     super(app, plugin);
   }
 
+  public override getSettingDefinitions(): SettingDefinitionItem[] {
+    return [
+      {
+        name: "Memo 保存文件夹",
+        desc: "新 Memo 将写入此目录。修改路径不会移动或删除旧目录中的文件。",
+        render: (setting) => {
+          setting.addText((text) => {
+            text.setPlaceholder("Memos").setValue(this.plugin.settings.memoFolder);
+            text.onChange(async (value) => {
+              this.plugin.settings.memoFolder = normalizeMemoFolder(value);
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        },
+      },
+      {
+        name: "附件保存位置",
+        desc: "留空时使用 <Memo 保存文件夹>/_attachments。该目录位于 Vault 内，可同步并支持标准 Obsidian 链接。",
+        render: (setting) => {
+          setting.addText((text) => {
+            text.setPlaceholder("Memos/_attachments").setValue(this.plugin.settings.attachmentFolder);
+            text.onChange(async (value) => {
+              this.plugin.settings.attachmentFolder = value.trim();
+              await this.plugin.saveSettings();
+            });
+          });
+        },
+      },
+      {
+        name: "新建 Memo 默认类型",
+        desc: "Composer 打开时默认创建普通 Memo 或任务。",
+        render: (setting) => {
+          setting.addDropdown((dropdown) => {
+            dropdown
+              .addOption("note", "普通 Memo")
+              .addOption("task", "任务")
+              .setValue(this.plugin.settings.defaultMemoType)
+              .onChange(async (value) => {
+                this.plugin.settings.defaultMemoType = value === "task" ? "task" : "note";
+                await this.plugin.saveSettings();
+                this.plugin.scheduleViewRefresh();
+              });
+          });
+        },
+      },
+      {
+        name: "缩略列表位置",
+        desc: "Apple Notes 风格的 Memo 列表显示在详情区左侧或右侧。",
+        render: (setting) => {
+          setting.addDropdown((dropdown) => {
+            dropdown
+              .addOption("right", "右侧（默认）")
+              .addOption("left", "左侧")
+              .setValue(this.plugin.settings.listPanePosition)
+              .onChange(async (value) => {
+                this.plugin.settings.listPanePosition = value === "left" ? "left" : "right";
+                await this.plugin.saveSettings();
+                this.plugin.scheduleViewRefresh();
+              });
+          });
+        },
+      },
+      {
+        name: "列表默认展开",
+        desc: "控制 Memos View 首次打开时是否显示缩略列表。",
+        render: (setting) => {
+          setting.addToggle((toggle) => {
+            toggle.setValue(!this.plugin.settings.listPaneCollapsed).onChange(async (expanded) => {
+              this.plugin.settings.listPaneCollapsed = !expanded;
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        },
+      },
+      {
+        name: "缩略列表宽度",
+        desc: "桌面端列表栏宽度，范围 240–420 px。",
+        render: (setting) => {
+          setting.addSlider((slider) => {
+            slider.setLimits(240, 420, 10).setValue(this.plugin.settings.listPaneWidth).onChange(async (value) => {
+              this.plugin.settings.listPaneWidth = Math.round(value);
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        },
+      },
+    ];
+  }
+
   public override display(): void {
     this.containerEl.empty();
-    new Setting(this.containerEl).setName("General").setHeading();
 
     new Setting(this.containerEl)
       .setName("Memo 保存文件夹")

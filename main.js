@@ -617,9 +617,91 @@ var ObsidianMemosSettingTab = class extends import_obsidian4.PluginSettingTab {
     super(app, plugin);
     this.plugin = plugin;
   }
+  getSettingDefinitions() {
+    return [
+      {
+        name: "Memo \u4FDD\u5B58\u6587\u4EF6\u5939",
+        desc: "\u65B0 Memo \u5C06\u5199\u5165\u6B64\u76EE\u5F55\u3002\u4FEE\u6539\u8DEF\u5F84\u4E0D\u4F1A\u79FB\u52A8\u6216\u5220\u9664\u65E7\u76EE\u5F55\u4E2D\u7684\u6587\u4EF6\u3002",
+        render: (setting) => {
+          setting.addText((text) => {
+            text.setPlaceholder("Memos").setValue(this.plugin.settings.memoFolder);
+            text.onChange(async (value) => {
+              this.plugin.settings.memoFolder = normalizeMemoFolder(value);
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        }
+      },
+      {
+        name: "\u9644\u4EF6\u4FDD\u5B58\u4F4D\u7F6E",
+        desc: "\u7559\u7A7A\u65F6\u4F7F\u7528 <Memo \u4FDD\u5B58\u6587\u4EF6\u5939>/_attachments\u3002\u8BE5\u76EE\u5F55\u4F4D\u4E8E Vault \u5185\uFF0C\u53EF\u540C\u6B65\u5E76\u652F\u6301\u6807\u51C6 Obsidian \u94FE\u63A5\u3002",
+        render: (setting) => {
+          setting.addText((text) => {
+            text.setPlaceholder("Memos/_attachments").setValue(this.plugin.settings.attachmentFolder);
+            text.onChange(async (value) => {
+              this.plugin.settings.attachmentFolder = value.trim();
+              await this.plugin.saveSettings();
+            });
+          });
+        }
+      },
+      {
+        name: "\u65B0\u5EFA Memo \u9ED8\u8BA4\u7C7B\u578B",
+        desc: "Composer \u6253\u5F00\u65F6\u9ED8\u8BA4\u521B\u5EFA\u666E\u901A Memo \u6216\u4EFB\u52A1\u3002",
+        render: (setting) => {
+          setting.addDropdown((dropdown) => {
+            dropdown.addOption("note", "\u666E\u901A Memo").addOption("task", "\u4EFB\u52A1").setValue(this.plugin.settings.defaultMemoType).onChange(async (value) => {
+              this.plugin.settings.defaultMemoType = value === "task" ? "task" : "note";
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        }
+      },
+      {
+        name: "\u7F29\u7565\u5217\u8868\u4F4D\u7F6E",
+        desc: "Apple Notes \u98CE\u683C\u7684 Memo \u5217\u8868\u663E\u793A\u5728\u8BE6\u60C5\u533A\u5DE6\u4FA7\u6216\u53F3\u4FA7\u3002",
+        render: (setting) => {
+          setting.addDropdown((dropdown) => {
+            dropdown.addOption("right", "\u53F3\u4FA7\uFF08\u9ED8\u8BA4\uFF09").addOption("left", "\u5DE6\u4FA7").setValue(this.plugin.settings.listPanePosition).onChange(async (value) => {
+              this.plugin.settings.listPanePosition = value === "left" ? "left" : "right";
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        }
+      },
+      {
+        name: "\u5217\u8868\u9ED8\u8BA4\u5C55\u5F00",
+        desc: "\u63A7\u5236 Memos View \u9996\u6B21\u6253\u5F00\u65F6\u662F\u5426\u663E\u793A\u7F29\u7565\u5217\u8868\u3002",
+        render: (setting) => {
+          setting.addToggle((toggle) => {
+            toggle.setValue(!this.plugin.settings.listPaneCollapsed).onChange(async (expanded) => {
+              this.plugin.settings.listPaneCollapsed = !expanded;
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        }
+      },
+      {
+        name: "\u7F29\u7565\u5217\u8868\u5BBD\u5EA6",
+        desc: "\u684C\u9762\u7AEF\u5217\u8868\u680F\u5BBD\u5EA6\uFF0C\u8303\u56F4 240\u2013420 px\u3002",
+        render: (setting) => {
+          setting.addSlider((slider) => {
+            slider.setLimits(240, 420, 10).setValue(this.plugin.settings.listPaneWidth).onChange(async (value) => {
+              this.plugin.settings.listPaneWidth = Math.round(value);
+              await this.plugin.saveSettings();
+              this.plugin.scheduleViewRefresh();
+            });
+          });
+        }
+      }
+    ];
+  }
   display() {
     this.containerEl.empty();
-    new import_obsidian4.Setting(this.containerEl).setName("General").setHeading();
     new import_obsidian4.Setting(this.containerEl).setName("Memo \u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u65B0 Memo \u5C06\u5199\u5165\u6B64\u76EE\u5F55\u3002\u4FEE\u6539\u8DEF\u5F84\u4E0D\u4F1A\u79FB\u52A8\u6216\u5220\u9664\u65E7\u76EE\u5F55\u4E2D\u7684\u6587\u4EF6\u3002").addText((text) => {
       text.setPlaceholder("Memos").setValue(this.plugin.settings.memoFolder);
       text.onChange(async (value) => {
@@ -2121,7 +2203,8 @@ var MemosView = class extends import_obsidian10.ItemView {
     this.splitEl.setCssProps({ "--memos-list-width": `${this.plugin.settings.listPaneWidth}px` });
   }
   isMobileLayout() {
-    return this.contentEl.clientWidth > 0 && this.contentEl.clientWidth < 700;
+    const appIsMobile = this.app.isMobile;
+    return appIsMobile === true || import_obsidian10.Platform.isMobile;
   }
   startDividerDrag(event) {
     if (this.isMobileLayout() || this.plugin.settings.listPaneCollapsed) {
