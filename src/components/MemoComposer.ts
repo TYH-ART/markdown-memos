@@ -13,6 +13,7 @@ type PendingAttachment =
   | { kind: "vault"; file: TFile; name: string; mime: string; size: number };
 
 export class MemoComposer {
+  private readonly container: HTMLElement;
   private readonly titleInput: HTMLInputElement;
   private readonly textarea: HTMLTextAreaElement;
   private readonly titleMirror: HTMLElement;
@@ -37,6 +38,7 @@ export class MemoComposer {
       getPopularTags?: () => string[];
     } = {},
   ) {
+    this.container = container;
     this.memoType = options.defaultType ?? "note";
     this.attachmentService = options.attachmentService;
     const composer = container.createDiv({ cls: "obsidian-memos-composer" });
@@ -291,10 +293,11 @@ export class MemoComposer {
       return;
     }
     const url = URL.createObjectURL(attachment.file);
-    const anchor = document.createElement("a");
+    const anchor = this.container.createEl("a");
     anchor.href = url;
     anchor.download = attachment.name;
     anchor.click();
+    anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 

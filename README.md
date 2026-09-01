@@ -1,10 +1,24 @@
 # Markdown Memos
 
+Markdown Memos is a local-first quick-capture plugin that stores every memo as a plain Markdown file. It provides a fast memo composer, a searchable card timeline, tags, tasks, and file attachments without requiring a database or a remote service.
+
+## Features
+
+- Capture notes and tasks with a persistent quick composer.
+- Store one memo per Markdown file with standard YAML frontmatter.
+- Search, filter by tags, pin, edit, archive, and safely delete memos.
+- Attach images, video, audio, and other files inside your vault.
+- Use desktop and mobile layouts with light and dark themes.
+
+The plugin is designed for Obsidian vaults and keeps your data portable as ordinary Markdown files.
+
+## 中文说明
+
 一个以 Obsidian Vault 为唯一数据源的快速记录插件。它提供 Memos 风格的顶部输入框与单列卡片流，同时坚持“一条 Memo 一个 Markdown 文件”。插件 ID 为 `markdown-memos`，不会与社区插件 Thino（旧 `obsidian-memos` ID）冲突。
 
 ## MVP 功能
 
-- 独立 Memos View、Ribbon 入口和 `Open Markdown Memos` 命令
+- 独立 Memos View、Ribbon 入口和 `Open memos view` 命令
 - 点击 `NOTE` 或按 `Cmd/Ctrl + Enter` 发布
 - 每条 Memo 保存为 `YYYYMMDD-HHmmss.md`，同秒写入自动添加唯一后缀
 - 标准 YAML Frontmatter：`created`、`modified`、`pinned`、`source`

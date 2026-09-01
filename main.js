@@ -362,7 +362,8 @@ ${body}${body.endsWith("\n") ? "" : "\n"}`;
     return currentFile;
   }
   async updateFrontmatter(file, update) {
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (rawFrontmatter) => {
+      const frontmatter = rawFrontmatter && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter) ? rawFrontmatter : {};
       update(frontmatter);
       frontmatter.modified = formatLocalIso(/* @__PURE__ */ new Date());
     });
@@ -478,10 +479,11 @@ var AttachmentService = class {
     }
     const data = await this.app.vault.readBinary(file);
     const url = URL.createObjectURL(new Blob([data], { type: attachment.mime }));
-    const anchor = this.app.workspace.containerEl.ownerDocument.createElement("a");
+    const anchor = this.app.workspace.containerEl.createEl("a");
     anchor.href = url;
     anchor.download = attachment.name;
     anchor.click();
+    anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1e3);
   }
   async deleteManagedAttachment(attachment) {
@@ -497,7 +499,7 @@ var AttachmentService = class {
   }
   pickExternalFiles() {
     return new Promise((resolve) => {
-      const input = this.app.workspace.containerEl.ownerDocument.createElement("input");
+      const input = this.app.workspace.containerEl.createEl("input");
       input.type = "file";
       input.multiple = true;
       input.accept = "*/*";
@@ -617,7 +619,7 @@ var ObsidianMemosSettingTab = class extends import_obsidian4.PluginSettingTab {
   }
   display() {
     this.containerEl.empty();
-    this.containerEl.createEl("h2", { text: "Markdown Memos" });
+    new import_obsidian4.Setting(this.containerEl).setName("Markdown Memos").setHeading();
     new import_obsidian4.Setting(this.containerEl).setName("Memo \u4FDD\u5B58\u6587\u4EF6\u5939").setDesc("\u65B0 Memo \u5C06\u5199\u5165\u6B64\u76EE\u5F55\u3002\u4FEE\u6539\u8DEF\u5F84\u4E0D\u4F1A\u79FB\u52A8\u6216\u5220\u9664\u65E7\u76EE\u5F55\u4E2D\u7684\u6587\u4EF6\u3002").addText((text) => {
       text.setPlaceholder("Memos").setValue(this.plugin.settings.memoFolder);
       text.onChange(async (value) => {
@@ -655,7 +657,7 @@ var ObsidianMemosSettingTab = class extends import_obsidian4.PluginSettingTab {
       });
     });
     new import_obsidian4.Setting(this.containerEl).setName("\u7F29\u7565\u5217\u8868\u5BBD\u5EA6").setDesc("\u684C\u9762\u7AEF\u5217\u8868\u680F\u5BBD\u5EA6\uFF0C\u8303\u56F4 240\u2013420 px\u3002").addSlider((slider) => {
-      slider.setLimits(240, 420, 10).setValue(this.plugin.settings.listPaneWidth).setDynamicTooltip().onChange(async (value) => {
+      slider.setLimits(240, 420, 10).setValue(this.plugin.settings.listPaneWidth).onChange(async (value) => {
         this.plugin.settings.listPaneWidth = Math.round(value);
         await this.plugin.saveSettings();
         this.plugin.scheduleViewRefresh();
@@ -693,8 +695,9 @@ var MemoAttachmentList = class {
     }
   }
   renderAttachment(container, attachment) {
+    const isMedia = attachment.mime.startsWith("image/") || attachment.mime.startsWith("video/");
     const item = container.createDiv({
-      cls: "obsidian-memos-attachment",
+      cls: `obsidian-memos-attachment${isMedia ? " is-media" : ""}`,
       attr: { role: "button", tabindex: "0", title: attachment.name }
     });
     const url = this.attachmentService.getResourceUrl(attachment);
@@ -709,7 +712,7 @@ var MemoAttachmentList = class {
       text.createSpan({ cls: "obsidian-memos-attachment__name", text: attachment.name });
       text.createSpan({ cls: "obsidian-memos-attachment__size", text: formatFileSize(attachment.size) });
     }
-    if (attachment.mime.startsWith("image/") || attachment.mime.startsWith("video/")) {
+    if (isMedia) {
       item.createDiv({ cls: "obsidian-memos-attachment__caption", text: attachment.name });
     }
     this.owner.registerDomEvent(item, "click", (event) => {
@@ -1081,8 +1084,8 @@ var MemoCard = class {
     const updateDraft = () => {
       const content = joinMemoContent(titleInput.value, textarea.value);
       this.scheduleAutoSave(content);
-      titleInput.style.height = "auto";
-      titleInput.style.height = `${titleInput.scrollHeight}px`;
+      titleInput.setCssProps({ height: "auto" });
+      titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -1110,8 +1113,8 @@ var MemoCard = class {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
-    titleInput.style.height = "auto";
-    titleInput.style.height = `${titleInput.scrollHeight}px`;
+    titleInput.setCssProps({ height: "auto" });
+    titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
     initialTarget.focus();
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
@@ -1209,12 +1212,12 @@ var MemoCard = class {
     const nodes = [];
     let current;
     while (current = walker.nextNode()) {
-      if (current instanceof Text && /#[\p{L}\p{N}_/-]+/u.test(current.data)) nodes.push(current);
+      if (current.instanceOf(Text) && /#[\p{L}\p{N}_/-]+/u.test(current.data)) nodes.push(current);
     }
     for (const node of nodes) {
       const parent = node.parentElement;
       if (!parent || parent.closest("a, code, pre, .obsidian-memos-inline-tag")) continue;
-      const replacement = document.createElement("span");
+      const replacement = container.createSpan();
       this.renderTextWithTags(replacement, node.data);
       node.replaceWith(...Array.from(replacement.childNodes));
     }
@@ -1299,6 +1302,7 @@ var MemoComposer = class {
     this.pendingAttachments = [];
     this.submitting = false;
     var _a;
+    this.container = container;
     this.memoType = (_a = options.defaultType) != null ? _a : "note";
     this.attachmentService = options.attachmentService;
     const composer = container.createDiv({ cls: "obsidian-memos-composer" });
@@ -1553,10 +1557,11 @@ var MemoComposer = class {
       return;
     }
     const url = URL.createObjectURL(attachment.file);
-    const anchor = document.createElement("a");
+    const anchor = this.container.createEl("a");
     anchor.href = url;
     anchor.download = attachment.name;
     anchor.click();
+    anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1e3);
   }
   async persistPendingAttachments(memo) {
@@ -2200,8 +2205,8 @@ var ObsidianMemosPlugin = class extends import_obsidian11.Plugin {
     this.registerView(MEMOS_VIEW_TYPE, (leaf) => new MemosView(leaf, this));
     this.addRibbonIcon("book-open", "\u6253\u5F00 Markdown Memos", () => void this.openMemosView());
     this.addCommand({
-      id: "open-markdown-memos",
-      name: "Open Markdown Memos",
+      id: "open-memos-view",
+      name: "Open memos view",
       callback: () => void this.openMemosView()
     });
     this.addSettingTab(new ObsidianMemosSettingTab(this.app, this));
@@ -2227,7 +2232,6 @@ var ObsidianMemosPlugin = class extends import_obsidian11.Plugin {
     if (this.refreshTimer !== void 0) {
       window.clearTimeout(this.refreshTimer);
     }
-    this.app.workspace.detachLeavesOfType(MEMOS_VIEW_TYPE);
   }
   async openMemosView() {
     try {

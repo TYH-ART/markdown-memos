@@ -33,8 +33,8 @@ export default class ObsidianMemosPlugin extends Plugin {
     // across desktop/mobile icon registries (unlike some newer Lucide aliases).
     this.addRibbonIcon("book-open", "打开 Markdown Memos", () => void this.openMemosView());
     this.addCommand({
-      id: "open-markdown-memos",
-      name: "Open Markdown Memos",
+      id: "open-memos-view",
+      name: "Open memos view",
       callback: () => void this.openMemosView(),
     });
     this.addSettingTab(new ObsidianMemosSettingTab(this.app, this));
@@ -62,7 +62,6 @@ export default class ObsidianMemosPlugin extends Plugin {
     if (this.refreshTimer !== undefined) {
       window.clearTimeout(this.refreshTimer);
     }
-    this.app.workspace.detachLeavesOfType(MEMOS_VIEW_TYPE);
   }
 
   public async openMemosView(): Promise<void> {

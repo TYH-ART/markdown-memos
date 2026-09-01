@@ -22,8 +22,9 @@ export class MemoAttachmentList {
   }
 
   private renderAttachment(container: HTMLElement, attachment: MemoAttachment): void {
+    const isMedia = attachment.mime.startsWith("image/") || attachment.mime.startsWith("video/");
     const item = container.createDiv({
-      cls: "obsidian-memos-attachment",
+      cls: `obsidian-memos-attachment${isMedia ? " is-media" : ""}`,
       attr: { role: "button", tabindex: "0", title: attachment.name },
     });
     const url = this.attachmentService.getResourceUrl(attachment);
@@ -38,7 +39,7 @@ export class MemoAttachmentList {
       text.createSpan({ cls: "obsidian-memos-attachment__name", text: attachment.name });
       text.createSpan({ cls: "obsidian-memos-attachment__size", text: formatFileSize(attachment.size) });
     }
-    if (attachment.mime.startsWith("image/") || attachment.mime.startsWith("video/")) {
+    if (isMedia) {
       item.createDiv({ cls: "obsidian-memos-attachment__caption", text: attachment.name });
     }
     this.owner.registerDomEvent(item, "click", (event: MouseEvent) => {

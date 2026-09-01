@@ -94,10 +94,11 @@ export class AttachmentService {
     }
     const data = await this.app.vault.readBinary(file);
     const url = URL.createObjectURL(new Blob([data], { type: attachment.mime }));
-    const anchor = this.app.workspace.containerEl.ownerDocument.createElement("a");
+    const anchor = this.app.workspace.containerEl.createEl("a");
     anchor.href = url;
     anchor.download = attachment.name;
     anchor.click();
+    anchor.remove();
     window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
@@ -116,7 +117,7 @@ export class AttachmentService {
 
   private pickExternalFiles(): Promise<File[]> {
     return new Promise((resolve) => {
-      const input = this.app.workspace.containerEl.ownerDocument.createElement("input");
+      const input = this.app.workspace.containerEl.createEl("input");
       input.type = "file";
       input.multiple = true;
       input.accept = "*/*";

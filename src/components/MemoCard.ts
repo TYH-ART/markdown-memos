@@ -220,8 +220,8 @@ export class MemoCard {
     const updateDraft = (): void => {
       const content = joinMemoContent(titleInput.value, textarea.value);
       this.scheduleAutoSave(content);
-      titleInput.style.height = "auto";
-      titleInput.style.height = `${titleInput.scrollHeight}px`;
+      titleInput.setCssProps({ height: "auto" });
+      titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -243,8 +243,8 @@ export class MemoCard {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
-    titleInput.style.height = "auto";
-    titleInput.style.height = `${titleInput.scrollHeight}px`;
+    titleInput.setCssProps({ height: "auto" });
+    titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
     initialTarget.focus();
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
@@ -351,12 +351,12 @@ export class MemoCard {
     const nodes: Text[] = [];
     let current: Node | null;
     while ((current = walker.nextNode())) {
-      if (current instanceof Text && /#[\p{L}\p{N}_/-]+/u.test(current.data)) nodes.push(current);
+      if (current.instanceOf(Text) && /#[\p{L}\p{N}_/-]+/u.test(current.data)) nodes.push(current);
     }
     for (const node of nodes) {
       const parent = node.parentElement;
       if (!parent || parent.closest("a, code, pre, .obsidian-memos-inline-tag")) continue;
-      const replacement = document.createElement("span");
+      const replacement = container.createSpan();
       this.renderTextWithTags(replacement, node.data);
       node.replaceWith(...Array.from(replacement.childNodes));
     }

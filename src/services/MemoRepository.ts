@@ -234,7 +234,7 @@ export class MemoRepository {
     const yamlSource = match[1]?.trim() ?? "";
     let frontmatter: MemoFrontmatter = {};
     if (yamlSource) {
-      const parsed = parseYaml(yamlSource);
+      const parsed: unknown = parseYaml(yamlSource);
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         throw new Error("YAML Frontmatter 必须是对象");
       }
@@ -301,7 +301,10 @@ export class MemoRepository {
   }
 
   private async updateFrontmatter(file: TFile, update: (frontmatter: Record<string, unknown>) => void): Promise<void> {
-    await this.app.fileManager.processFrontMatter(file, (frontmatter) => {
+    await this.app.fileManager.processFrontMatter(file, (rawFrontmatter: unknown) => {
+      const frontmatter = rawFrontmatter && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter)
+        ? rawFrontmatter as Record<string, unknown>
+        : {};
       update(frontmatter);
       frontmatter.modified = formatLocalIso(new Date());
     });

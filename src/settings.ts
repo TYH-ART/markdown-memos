@@ -12,7 +12,7 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
 
   public override display(): void {
     this.containerEl.empty();
-    this.containerEl.createEl("h2", { text: "Markdown Memos" });
+    new Setting(this.containerEl).setName("Markdown Memos").setHeading();
 
     new Setting(this.containerEl)
       .setName("Memo 保存文件夹")
@@ -85,7 +85,6 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
         slider
           .setLimits(240, 420, 10)
           .setValue(this.plugin.settings.listPaneWidth)
-          .setDynamicTooltip()
           .onChange(async (value) => {
             this.plugin.settings.listPaneWidth = Math.round(value);
             await this.plugin.saveSettings();
