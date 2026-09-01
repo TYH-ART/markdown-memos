@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, setIcon, WorkspaceLeaf } from "obsidian";
+import { ItemView, Menu, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type ObsidianMemosPlugin from "../main";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
@@ -169,7 +169,14 @@ export class MemosView extends ItemView {
     this.memoList = new MemoList(this, listHost, {
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
+      onDelete: (memo) => void this.deleteMemoFromList(memo),
       onContextMenu: (memo, event) => this.openListContextMenu(memo, event),
+    });
+
+    const mobileScrim = this.splitEl.createDiv({ cls: "obsidian-memos-mobile-scrim" });
+    this.registerDomEvent(mobileScrim, "click", () => {
+      this.mobileDetail = true;
+      this.updateLayoutState();
     });
 
     const divider = this.splitEl.createDiv({ cls: "obsidian-memos-divider", attr: { role: "separator", "aria-label": "调整列表宽度" } });
@@ -177,16 +184,6 @@ export class MemosView extends ItemView {
 
     const detailPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-detail-pane" });
     this.detailContentEl = detailPaneEl.createDiv({ cls: "obsidian-memos-detail-pane__content" });
-    const detailToolbar = this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-pane__toolbar" });
-    const mobileBackButton = detailToolbar.createEl("button", {
-      cls: "clickable-icon obsidian-memos-mobile-back",
-      attr: { type: "button", "aria-label": "返回 Memo 列表", title: "返回列表" },
-    });
-    setIcon(mobileBackButton, "arrow-left");
-    this.registerDomEvent(mobileBackButton, "click", () => {
-      this.mobileDetail = false;
-      this.updateLayoutState();
-    });
     const composerHost = this.detailContentEl.createDiv({ cls: "obsidian-memos-composer-host" });
     new MemoComposer(
       this,
@@ -439,6 +436,11 @@ export class MemosView extends ItemView {
   }
 
   private async toggleListPane(): Promise<void> {
+    if (this.isMobileLayout()) {
+      this.mobileDetail = !this.mobileDetail;
+      this.updateLayoutState();
+      return;
+    }
     this.plugin.settings.listPaneCollapsed = !this.plugin.settings.listPaneCollapsed;
     await this.plugin.saveSettings();
     this.updateLayoutState();
@@ -456,7 +458,11 @@ export class MemosView extends ItemView {
   }
 
   private isMobileLayout(): boolean {
-    return this.contentEl.clientWidth > 0 && this.contentEl.clientWidth < 700;
+    // The app-level flag follows `this.app.emulateMobile(true)` in the
+    // developer console. Platform.isMobile covers physical mobile builds while
+    // keeping narrow desktop panes in the desktop layout.
+    const appIsMobile = (this.app as unknown as { isMobile?: boolean }).isMobile;
+    return appIsMobile === true || Platform.isMobile;
   }
 
   private startDividerDrag(event: PointerEvent): void {
