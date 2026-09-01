@@ -11,7 +11,6 @@ import { openTextEditingMenu } from "./TextEditingMenu";
 export interface MemoCardOptions {
   onChanged: () => Promise<void>;
   attachmentService: AttachmentService;
-  onTagSelect?: (tag: string) => void;
   onEditingChange?: (editing: boolean) => void;
   getPopularTags?: () => string[];
 }
@@ -164,14 +163,6 @@ export class MemoCard {
       }
     }
     this.renderDetectedLinks(this.display, this.memo.content);
-
-    if (this.memo.tags.length > 0) {
-      const tags = this.display.createDiv({ cls: "obsidian-memos-card__tags", attr: { "aria-label": "标签" } });
-      for (const tag of this.memo.tags) {
-        const tagButton = tags.createEl("button", { cls: "tag obsidian-memos-tag", text: tag, attr: { type: "button" } });
-        this.owner.registerDomEvent(tagButton, "click", () => this.options.onTagSelect?.(tag));
-      }
-    }
 
     new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
       this.display,

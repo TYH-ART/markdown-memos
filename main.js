@@ -1029,16 +1029,6 @@ var MemoCard = class {
       }
     }
     this.renderDetectedLinks(this.display, this.memo.content);
-    if (this.memo.tags.length > 0) {
-      const tags = this.display.createDiv({ cls: "obsidian-memos-card__tags", attr: { "aria-label": "\u6807\u7B7E" } });
-      for (const tag of this.memo.tags) {
-        const tagButton = tags.createEl("button", { cls: "tag obsidian-memos-tag", text: tag, attr: { type: "button" } });
-        this.owner.registerDomEvent(tagButton, "click", () => {
-          var _a, _b;
-          return (_b = (_a = this.options).onTagSelect) == null ? void 0 : _b.call(_a, tag);
-        });
-      }
-    }
     new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
       this.display,
       this.memo.attachments
@@ -1918,7 +1908,6 @@ var MemosView = class extends import_obsidian10.ItemView {
       const card = new MemoCard(this.app, this, item, this.plugin.repository, memo, {
         onChanged: () => this.refresh(memo.file.path),
         attachmentService: this.plugin.attachmentService,
-        onTagSelect: (tag) => void this.selectTag(tag),
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : void 0;
         },
@@ -1989,14 +1978,6 @@ var MemosView = class extends import_obsidian10.ItemView {
       this.plugin.settings.selectedTag = null;
       this.tagSelect.value = "";
     }
-  }
-  async selectTag(tag) {
-    this.plugin.settings.selectedTag = tag;
-    if (this.tagSelect) {
-      this.tagSelect.value = tag;
-    }
-    await this.plugin.saveSettings();
-    await this.applyCurrentFilters();
   }
   getTagFrequency() {
     var _a, _b;

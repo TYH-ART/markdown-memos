@@ -233,7 +233,6 @@ export class MemosView extends ItemView {
       const card = new MemoCard(this.app, this, item, this.plugin.repository, memo, {
         onChanged: () => this.refresh(memo.file.path),
         attachmentService: this.plugin.attachmentService,
-        onTagSelect: (tag) => void this.selectTag(tag),
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : undefined;
         },
@@ -306,15 +305,6 @@ export class MemosView extends ItemView {
       this.plugin.settings.selectedTag = null;
       this.tagSelect.value = "";
     }
-  }
-
-  private async selectTag(tag: string): Promise<void> {
-    this.plugin.settings.selectedTag = tag;
-    if (this.tagSelect) {
-      this.tagSelect.value = tag;
-    }
-    await this.plugin.saveSettings();
-    await this.applyCurrentFilters();
   }
 
   private getTagFrequency(): Map<string, number> {

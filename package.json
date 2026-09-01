@@ -1,6 +1,6 @@
 {
   "name": "markdown-memos",
-  "version": "0.2.11",
+  "version": "0.2.12",
   "description": "A Memos-style quick capture view backed by one Markdown file per memo.",
   "main": "main.js",
   "scripts": {

@@ -348,27 +348,6 @@
   font-style: italic;
 }
 
-.obsidian-memos-card__tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 12px;
-}
-
-.obsidian-memos-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 2px 9px;
-  border: 0;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--interactive-accent) 12%, var(--background-secondary));
-  color: var(--text-accent);
-  font-size: var(--font-ui-smaller);
-  line-height: 1.2;
-  white-space: nowrap;
-}
-
 .obsidian-memos-card__editor {
   min-height: 150px;
   padding: 12px;
