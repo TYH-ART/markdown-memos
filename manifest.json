@@ -1,0 +1,9 @@
+{
+  "id": "markdown-memos",
+  "name": "Markdown Memos",
+  "version": "0.2.9",
+  "minAppVersion": "1.6.6",
+  "description": "Capture one memo per Markdown file in an Obsidian-native timeline.",
+  "author": "Markdown Memos contributors",
+  "isDesktopOnly": false
+}
