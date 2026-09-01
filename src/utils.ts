@@ -67,7 +67,7 @@ export function joinMemoContent(title: string, body: string): string {
 }
 
 export function extractExternalUrls(content: string): string[] {
-  const matches = content.match(/https?:\/\/[^\s<>()\[\]{}"']+/gi) ?? [];
+  const matches = content.match(/https?:\/\/[^\s<>()\x5B\x5D{}"']+/gi) ?? [];
   return Array.from(new Set(matches.map((url) => url.replace(/[.,;:!?]+$/, ""))));
 }
 
