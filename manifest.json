@@ -1,7 +1,7 @@
 {
   "id": "markdown-memos",
   "name": "Markdown Memos",
-  "version": "0.2.15",
+  "version": "1.0.0",
   "minAppVersion": "1.6.6",
   "description": "Capture one memo per Markdown file in a fast, local-first timeline.",
   "author": "Markdown Memos contributors",
