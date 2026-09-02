@@ -154,10 +154,11 @@ function normalizeNotebooks(value: unknown): ObsidianMemosSettings["memoNotebook
       name: candidate.name.trim(),
       private: candidate.private === true,
       passwordHash: typeof candidate.passwordHash === "string" && candidate.passwordHash ? candidate.passwordHash : undefined,
+      pinned: candidate.pinned === true,
     }];
   });
-  if (!notebooks.some((item) => item.id === "default")) notebooks.unshift({ id: "default", name: "备忘录 1", private: false, passwordHash: undefined });
-  if (!notebooks.some((item) => item.id === "private")) notebooks.push({ id: "private", name: "私密备忘录", private: true, passwordHash: undefined });
+  if (!notebooks.some((item) => item.id === "default")) notebooks.unshift({ id: "default", name: "备忘录 1", private: false, passwordHash: undefined, pinned: false });
+  if (!notebooks.some((item) => item.id === "private")) notebooks.push({ id: "private", name: "私密备忘录", private: true, passwordHash: undefined, pinned: false });
   return notebooks;
 }
 

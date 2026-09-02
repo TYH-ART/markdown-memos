@@ -3,8 +3,6 @@ import type { Component } from "obsidian";
 import type { MemoRecord } from "../types";
 import { splitMemoContent } from "../utils";
 
-const SWIPE_DELETE_WIDTH = 72;
-const SWIPE_OPEN_THRESHOLD = SWIPE_DELETE_WIDTH / 2;
 
 export interface MemoListPaneCallbacks {
   onSelect: (memo: MemoRecord) => void;
@@ -13,24 +11,11 @@ export interface MemoListPaneCallbacks {
   onContextMenu: (memo: MemoRecord, event: MouseEvent) => void;
 }
 
-interface SwipeGesture {
-  row: HTMLElement;
-  item: HTMLElement;
-  pointerId: number;
-  startX: number;
-  startY: number;
-  startOffset: number;
-  currentOffset: number;
-  horizontal: boolean;
-}
-
 /** Renders compact Apple Notes-style summaries without rendering full Markdown. */
 export class MemoList {
   private readonly listEl: HTMLElement;
   private memos: MemoRecord[] = [];
   private selectedPath?: string;
-  private swipeGesture?: SwipeGesture;
-  private suppressClick = false;
 
   public constructor(
     owner: Component,
@@ -39,10 +24,6 @@ export class MemoList {
   ) {
     this.listEl = container.createDiv({ cls: "obsidian-memos-list-pane__items" });
     owner.registerDomEvent(this.listEl, "click", (event: MouseEvent) => {
-      if (this.suppressClick) {
-        event.preventDefault();
-        return;
-      }
       const eventTarget = event.target instanceof Element ? event.target : null;
       const deleteButton = eventTarget?.closest<HTMLElement>("[data-swipe-delete]") ?? null;
       if (deleteButton) {
@@ -59,15 +40,10 @@ export class MemoList {
       }
       const memo = this.memos.find((item) => item.file.path === path);
       if (memo) {
-        if (target.hasClass("is-swipe-open")) {
-          this.closeSwipeRows();
-          return;
-        }
         const taskToggle = eventTarget?.closest("[data-task-toggle]") ?? null;
         if (taskToggle) {
           this.callbacks.onToggleTask(memo);
         } else {
-          this.closeSwipeRows();
           this.callbacks.onSelect(memo);
         }
       }
@@ -80,10 +56,6 @@ export class MemoList {
       event.preventDefault();
       this.callbacks.onContextMenu(memo, event);
     });
-    owner.registerDomEvent(this.listEl, "pointerdown", (event: PointerEvent) => this.startSwipe(event));
-    owner.registerDomEvent(this.listEl, "pointermove", (event: PointerEvent) => this.moveSwipe(event));
-    owner.registerDomEvent(this.listEl, "pointerup", (event: PointerEvent) => this.finishSwipe(event));
-    owner.registerDomEvent(this.listEl, "pointercancel", (event: PointerEvent) => this.cancelSwipe(event));
   }
 
   public setMemos(memos: MemoRecord[], selectedPath?: string): void {
@@ -93,84 +65,8 @@ export class MemoList {
   }
 
   public destroy(): void {
-    this.swipeGesture = undefined;
     this.listEl.empty();
     this.memos = [];
-  }
-
-  private startSwipe(event: PointerEvent): void {
-    if (!event.isPrimary || event.button !== 0 || !this.listEl.closest(".is-mobile")) return;
-    if (!(event.target instanceof Element) || event.target.closest("button")) return;
-    const row = event.target.closest<HTMLElement>(".obsidian-memos-list-row");
-    const item = row?.querySelector<HTMLElement>(".obsidian-memos-list-item");
-    if (!row || !item) return;
-
-    const isOpen = row.hasClass("is-swipe-open");
-    this.closeSwipeRows(row);
-    this.swipeGesture = {
-      row,
-      item,
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      startOffset: isOpen ? -SWIPE_DELETE_WIDTH : 0,
-      currentOffset: isOpen ? -SWIPE_DELETE_WIDTH : 0,
-      horizontal: false,
-    };
-  }
-
-  private moveSwipe(event: PointerEvent): void {
-    const gesture = this.swipeGesture;
-    if (!gesture || event.pointerId !== gesture.pointerId) return;
-    const deltaX = event.clientX - gesture.startX;
-    const deltaY = event.clientY - gesture.startY;
-
-    if (!gesture.horizontal) {
-      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 6) return;
-      if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-        this.swipeGesture = undefined;
-        return;
-      }
-      gesture.horizontal = true;
-      gesture.row.removeClass("is-swipe-open");
-      gesture.item.addClass("is-swiping");
-      gesture.item.setPointerCapture(event.pointerId);
-    }
-
-    event.preventDefault();
-    gesture.currentOffset = Math.max(-SWIPE_DELETE_WIDTH, Math.min(0, gesture.startOffset + deltaX));
-    gesture.item.style.setProperty("--memos-swipe-offset", `${gesture.currentOffset}px`);
-  }
-
-  private finishSwipe(event: PointerEvent): void {
-    const gesture = this.swipeGesture;
-    if (!gesture || event.pointerId !== gesture.pointerId) return;
-    this.swipeGesture = undefined;
-    gesture.item.removeClass("is-swiping");
-    gesture.item.style.removeProperty("--memos-swipe-offset");
-    if (!gesture.horizontal) return;
-
-    gesture.row.toggleClass("is-swipe-open", gesture.currentOffset <= -SWIPE_OPEN_THRESHOLD);
-    this.suppressClick = true;
-    window.setTimeout(() => { this.suppressClick = false; }, 0);
-    if (gesture.item.hasPointerCapture(event.pointerId)) {
-      gesture.item.releasePointerCapture(event.pointerId);
-    }
-  }
-
-  private cancelSwipe(event: PointerEvent): void {
-    const gesture = this.swipeGesture;
-    if (!gesture || event.pointerId !== gesture.pointerId) return;
-    this.swipeGesture = undefined;
-    gesture.item.removeClass("is-swiping");
-    gesture.item.style.removeProperty("--memos-swipe-offset");
-    gesture.row.toggleClass("is-swipe-open", gesture.startOffset < 0);
-  }
-
-  private closeSwipeRows(except?: HTMLElement): void {
-    this.listEl.querySelectorAll<HTMLElement>(".obsidian-memos-list-row.is-swipe-open").forEach((row) => {
-      if (row !== except) row.removeClass("is-swipe-open");
-    });
   }
 
   private activateDelete(memo: MemoRecord, button: HTMLElement): void {

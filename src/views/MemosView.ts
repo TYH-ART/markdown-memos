@@ -1,4 +1,4 @@
-import { ItemView, Menu, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
+import { App, ItemView, Menu, Modal, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type ObsidianMemosPlugin from "../main";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
@@ -265,8 +265,19 @@ export class MemosView extends ItemView {
     const detailPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-detail-pane" });
     this.detailContentEl = detailPaneEl.createDiv({ cls: "obsidian-memos-detail-pane__content" });
     this.mobileTrashToolbar = this.detailContentEl.createDiv({ cls: "obsidian-memos-mobile-trash-toolbar" });
+    const backFromTrash = this.mobileTrashToolbar.createEl("button", {
+      cls: "clickable-icon obsidian-memos-mobile-trash-back",
+      attr: { type: "button", "aria-label": "返回主界面", title: "返回主界面" },
+    });
+    setIcon(backFromTrash, "arrow-left");
     this.mobileTrashToolbar.createEl("strong", { text: "回收站" });
     const emptyTrashButton = this.mobileTrashToolbar.createEl("button", { text: "清空回收站", attr: { type: "button" } });
+    this.registerDomEvent(backFromTrash, "click", () => {
+      this.showTrash = false;
+      this.mobileDetail = true;
+      this.renderMobileLibrary();
+      void this.refresh();
+    });
     this.registerDomEvent(emptyTrashButton, "click", () => void this.emptyTrash());
     const composerHost = this.detailContentEl.createDiv({ cls: "obsidian-memos-composer-host" });
     new MemoComposer(
@@ -306,7 +317,8 @@ export class MemosView extends ItemView {
     if (!this.mobileNotebookList) return;
     this.mobileNotebookList.empty();
     const activeId = this.plugin.settings.activeMemoNotebookId;
-    for (const notebook of this.plugin.settings.memoNotebooks) {
+    const notebooks = [...this.plugin.settings.memoNotebooks].sort((left, right) => Number(right.pinned === true) - Number(left.pinned === true));
+    for (const notebook of notebooks) {
       const row = this.mobileNotebookList.createDiv({ cls: "obsidian-memos-mobile-library__row" });
       const button = row.createEl("button", {
         cls: `obsidian-memos-mobile-library__item${!this.showTrash && notebook.id === activeId ? " is-active" : ""}`,
@@ -315,7 +327,37 @@ export class MemosView extends ItemView {
       const icon = button.createSpan({ cls: "obsidian-memos-mobile-library__item-icon", attr: { "aria-hidden": "true" } });
       setIcon(icon, notebook.private ? "lock" : "notebook-tabs");
       button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
-      this.registerDomEvent(button, "click", () => void this.selectNotebook(notebook));
+      let longPressTimer: number | undefined;
+      let longPressTriggered = false;
+      const clearLongPress = (): void => {
+        if (longPressTimer !== undefined) window.clearTimeout(longPressTimer);
+        longPressTimer = undefined;
+      };
+      this.registerDomEvent(button, "pointerdown", (event: PointerEvent) => {
+        if (!event.isPrimary) return;
+        longPressTriggered = false;
+        clearLongPress();
+        longPressTimer = window.setTimeout(() => {
+          longPressTriggered = true;
+          this.openNotebookMenu(notebook, button);
+        }, 550);
+      });
+      this.registerDomEvent(button, "pointerup", clearLongPress);
+      this.registerDomEvent(button, "pointercancel", clearLongPress);
+      this.registerDomEvent(button, "pointerleave", clearLongPress);
+      this.registerDomEvent(button, "contextmenu", (event: MouseEvent) => {
+        event.preventDefault();
+        this.openNotebookMenu(notebook, button);
+      });
+      this.registerDomEvent(button, "click", (event: MouseEvent) => {
+        if (longPressTriggered) {
+          event.preventDefault();
+          event.stopPropagation();
+          longPressTriggered = false;
+          return;
+        }
+        void this.selectNotebook(notebook);
+      });
       const expandButton = row.createEl("button", {
         cls: "clickable-icon obsidian-memos-mobile-library__expand",
         attr: { type: "button", "aria-label": "展开备忘录内容", title: "展开备忘录内容" },
@@ -358,7 +400,7 @@ export class MemosView extends ItemView {
   }
 
   private async createNotebook(): Promise<void> {
-    const name = window.prompt("备忘录名称");
+    const name = await this.promptNotebookName("新建备忘录");
     if (!name?.trim()) return;
     const isPrivate = window.confirm("是否创建为私密备忘录？");
     let passwordHash: string | undefined;
@@ -383,6 +425,51 @@ export class MemosView extends ItemView {
     await this.plugin.saveSettings();
     this.renderMobileLibrary();
     await this.selectNotebook(notebook);
+  }
+
+  private openNotebookMenu(notebook: MemoNotebook, anchor: HTMLElement): void {
+    const menu = new Menu();
+    menu.addItem((item) => item.setTitle(notebook.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.toggleNotebookPinned(notebook)));
+    menu.addItem((item) => item.setTitle("重命名").setIcon("pencil").onClick(() => void this.renameNotebook(notebook)));
+    menu.addItem((item) => item.setTitle("删除备忘录").setIcon("trash-2")
+      .setDisabled(this.plugin.settings.memoNotebooks.length <= 1)
+      .onClick(() => void this.deleteNotebook(notebook)));
+    const rect = anchor.getBoundingClientRect();
+    menu.showAtPosition({ x: rect.left + rect.width / 2, y: rect.bottom });
+  }
+
+  private async toggleNotebookPinned(notebook: MemoNotebook): Promise<void> {
+    notebook.pinned = notebook.pinned !== true;
+    await this.plugin.saveSettings();
+    this.renderMobileLibrary();
+  }
+
+  private async renameNotebook(notebook: MemoNotebook): Promise<void> {
+    const name = await this.promptNotebookName("重命名备忘录", notebook.name);
+    if (!name?.trim()) return;
+    notebook.name = name.trim();
+    await this.plugin.saveSettings();
+    this.renderMobileLibrary();
+  }
+
+  private async deleteNotebook(notebook: MemoNotebook): Promise<void> {
+    if (this.plugin.settings.memoNotebooks.length <= 1) return;
+    if (!window.confirm(`删除“${notebook.name}”？其中的 Memo 将移动到默认备忘录。`)) return;
+    const fallback = this.plugin.settings.memoNotebooks.find((item) => item.id !== notebook.id);
+    if (!fallback) return;
+    await this.plugin.repository.moveMemosToNotebook(notebook.id, fallback.id);
+    this.plugin.settings.memoNotebooks = this.plugin.settings.memoNotebooks.filter((item) => item.id !== notebook.id);
+    if (this.plugin.settings.activeMemoNotebookId === notebook.id) this.plugin.settings.activeMemoNotebookId = fallback.id;
+    this.expandedNotebookId = fallback.id;
+    await this.plugin.saveSettings();
+    this.renderMobileLibrary();
+    await this.refresh();
+  }
+
+  private promptNotebookName(title: string, initial = ""): Promise<string | null> {
+    return new Promise((resolve) => {
+      new NotebookNameModal(this.app, title, resolve, initial).open();
+    });
   }
 
   private async selectNotebook(notebook: MemoNotebook): Promise<void> {
@@ -877,4 +964,50 @@ async function hashNotebookPassword(password: string): Promise<string> {
   const bytes = new TextEncoder().encode(password);
   const digest = await window.crypto.subtle.digest("SHA-256", bytes);
   return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
+}
+
+class NotebookNameModal extends Modal {
+  private submitted = false;
+
+  public constructor(
+    app: App,
+    private readonly heading: string,
+    private readonly resolveName: (name: string | null) => void,
+    private readonly initial: string,
+  ) {
+    super(app);
+  }
+
+  public override onOpen(): void {
+    this.titleEl.setText(this.heading);
+    const input = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "备忘录名称", value: this.initial } });
+    input.style.width = "100%";
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
+    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
+    const submit = (): void => {
+      const name = input.value.trim();
+      if (!name) return;
+      this.submitted = true;
+      this.resolveName(name);
+      this.close();
+    };
+    cancel.addEventListener("click", () => this.close());
+    confirm.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key === "Enter") {
+        event.preventDefault();
+        submit();
+      }
+    });
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  public override onClose(): void {
+    if (!this.submitted) this.resolveName(null);
+    this.contentEl.empty();
+  }
 }

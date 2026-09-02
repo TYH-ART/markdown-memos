@@ -18,7 +18,6 @@ export interface MemoCardOptions {
 }
 
 export class MemoCard {
-  private readonly container: HTMLElement;
   private readonly article: HTMLElement;
   private readonly display: HTMLElement;
   private markdownChild?: MarkdownRenderChild;
@@ -32,7 +31,6 @@ export class MemoCard {
   private finishingEdit = false;
   private deleteArmed = false;
   private readonly deleteButton: HTMLButtonElement;
-  private cardSwipe?: { pointerId: number; startX: number; startY: number; offset: number; horizontal: boolean };
 
   public constructor(
     private readonly app: App,
@@ -42,7 +40,6 @@ export class MemoCard {
     private readonly memo: MemoRecord,
     private readonly options: MemoCardOptions,
   ) {
-    this.container = container;
     const isTitleless = !splitMemoContent(memo.content).title.trim();
     this.article = container.createEl("article", {
       cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}${isTitleless ? " is-titleless" : ""}`,
@@ -112,9 +109,6 @@ export class MemoCard {
         } else {
           void this.startEditing();
         }
-      } else if (event.detail >= 3) {
-        event.preventDefault();
-        this.expand();
       }
     });
     owner.registerDomEvent(this.article, "keydown", (event: KeyboardEvent) => {
@@ -126,20 +120,6 @@ export class MemoCard {
     this.article.tabIndex = -1;
 
     this.display = this.article.createDiv({ cls: "obsidian-memos-card__display" });
-    const swipeDeleteButton = container.createEl("button", {
-      cls: "obsidian-memos-feed-item__swipe-delete",
-      attr: { type: "button", "aria-label": "移入回收站", title: "移入回收站" },
-    });
-    setIcon(swipeDeleteButton, "trash-2");
-    owner.registerDomEvent(swipeDeleteButton, "click", (event: MouseEvent) => {
-      event.preventDefault();
-      event.stopPropagation();
-      void this.trashImmediately();
-    });
-    owner.registerDomEvent(this.article, "pointerdown", (event: PointerEvent) => this.startCardSwipe(event));
-    owner.registerDomEvent(this.article, "pointermove", (event: PointerEvent) => this.moveCardSwipe(event));
-    owner.registerDomEvent(this.article, "pointerup", (event: PointerEvent) => this.finishCardSwipe(event));
-    owner.registerDomEvent(this.article, "pointercancel", () => this.cancelCardSwipe());
   }
 
   public async render(): Promise<void> {
@@ -483,55 +463,6 @@ export class MemoCard {
       console.error(`[Markdown Memos] 移入回收站失败：${this.memo.file.path}`, error);
       new Notice(`移入回收站失败：${errorMessage(error)}`);
     }
-  }
-
-  private startCardSwipe(event: PointerEvent): void {
-    if (!this.options.isMobileLayout?.() || this.options.trashMode || !event.isPrimary || event.button !== 0) return;
-    const target = event.target instanceof Element ? event.target : null;
-    if (target?.closest("button, input, textarea, select, a")) return;
-    this.cardSwipe = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      offset: this.container.hasClass("is-swipe-open") ? -72 : 0,
-      horizontal: false,
-    };
-  }
-
-  private moveCardSwipe(event: PointerEvent): void {
-    const swipe = this.cardSwipe;
-    if (!swipe || event.pointerId !== swipe.pointerId) return;
-    const deltaX = event.clientX - swipe.startX;
-    const deltaY = event.clientY - swipe.startY;
-    if (!swipe.horizontal) {
-      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 6) return;
-      if (Math.abs(deltaY) >= Math.abs(deltaX)) {
-        this.cardSwipe = undefined;
-        return;
-      }
-      swipe.horizontal = true;
-      this.article.setPointerCapture(event.pointerId);
-      this.container.addClass("is-swiping");
-    }
-    event.preventDefault();
-    swipe.offset = Math.max(-72, Math.min(0, (this.container.hasClass("is-swipe-open") ? -72 : 0) + deltaX));
-    this.article.style.setProperty("--memos-card-swipe-offset", `${swipe.offset}px`);
-  }
-
-  private finishCardSwipe(event: PointerEvent): void {
-    const swipe = this.cardSwipe;
-    if (!swipe || event.pointerId !== swipe.pointerId) return;
-    this.cardSwipe = undefined;
-    this.container.removeClass("is-swiping");
-    this.article.style.removeProperty("--memos-card-swipe-offset");
-    if (swipe.horizontal) this.container.toggleClass("is-swipe-open", swipe.offset <= -36);
-    if (this.article.hasPointerCapture(event.pointerId)) this.article.releasePointerCapture(event.pointerId);
-  }
-
-  private cancelCardSwipe(): void {
-    this.cardSwipe = undefined;
-    this.container.removeClass("is-swiping");
-    this.article.style.removeProperty("--memos-card-swipe-offset");
   }
 
   private async runAction(label: string, action: () => Promise<MemoRecord>): Promise<void> {

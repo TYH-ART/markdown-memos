@@ -115,6 +115,16 @@ export class MemoRepository {
     for (const memo of trashed) await this.deleteMemo(memo.file);
   }
 
+  public async moveMemosToNotebook(fromNotebookId: string, toNotebookId: string): Promise<void> {
+    const memos = await this.getMemos();
+    for (const memo of memos) {
+      if (memo.notebookId !== fromNotebookId) continue;
+      await this.updateFrontmatter(memo.file, (frontmatter) => {
+        frontmatter.notebookId = toNotebookId;
+      });
+    }
+  }
+
   public async togglePinned(file: TFile): Promise<MemoRecord> {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {
