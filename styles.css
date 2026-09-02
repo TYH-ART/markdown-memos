@@ -1029,7 +1029,16 @@
 }
 
 /* Desktop uses the same notebook library and memo interaction model as mobile.
-   Keep this block scoped so the existing desktop toolbar remains untouched. */
+   Keep this block scoped so mobile toolbar and behavior remain untouched. */
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-page {
+  padding-top: 0;
+}
+
+.workspace-leaf-content:has(.obsidian-memos-view:not(.is-mobile)) .view-header-title-container,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-toolbar__title {
+  display: none;
+}
+
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-list-pane__header,
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-list-pane__body {
   display: none;
@@ -1046,7 +1055,7 @@
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__upper {
   display: flex;
   min-height: 0;
-  flex: 0 0 70%;
+  flex: 0 0 90%;
   flex-direction: column;
   padding: 12px 10px 0;
 }
@@ -1187,8 +1196,8 @@
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash {
-  min-height: 30%;
-  flex: 0 0 30%;
+  min-height: 10%;
+  flex: 0 0 10%;
   margin: 0;
   padding: 12px 18px;
   align-items: flex-start;
@@ -1235,7 +1244,7 @@
   z-index: 2;
   min-height: 0;
   flex: 0 0 auto;
-  margin-bottom: 18px;
+  margin-bottom: 8px;
   background: var(--background-primary);
 }
 
@@ -1272,6 +1281,7 @@
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: 48px;
+  gap: 10px;
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-restore {
