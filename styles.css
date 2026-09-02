@@ -1057,11 +1057,23 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   z-index: 10;
   top: calc(0px - var(--header-height, 50px) - 14px);
   right: max(10px, env(safe-area-inset-right));
-  left: 52px;
+  left: 68px;
   height: var(--header-height, 50px);
   gap: 8px;
   padding-bottom: 0;
   overflow: visible;
+}
+
+.is-mobile .obsidian-memos-toolbar__icon {
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  padding: 0;
+}
+
+.is-mobile .obsidian-memos-toolbar__icon > svg {
+  width: 18px;
+  height: 18px;
 }
 
 .is-mobile .obsidian-memos-toolbar__mobile-refresh {
@@ -1202,7 +1214,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   position: relative;
   isolation: isolate;
   touch-action: pan-y;
-  margin-top: 0;
+  margin-top: -12px;
   border: 0;
   border-radius: 0;
 }
