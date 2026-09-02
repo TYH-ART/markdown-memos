@@ -44,6 +44,14 @@ export class MemoList {
         return;
       }
       const eventTarget = event.target instanceof Element ? event.target : null;
+      const deleteButton = eventTarget?.closest<HTMLElement>("[data-swipe-delete]") ?? null;
+      if (deleteButton) {
+        // The button owns deletion. Never let the row-level click handler
+        // interpret a delete tap as selecting/opening the memo.
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
       const target = eventTarget?.closest<HTMLElement>("[data-memo-path]") ?? null;
       const path = target?.dataset.memoPath;
       if (!path) {
@@ -51,13 +59,6 @@ export class MemoList {
       }
       const memo = this.memos.find((item) => item.file.path === path);
       if (memo) {
-        const deleteButton = eventTarget?.closest<HTMLElement>("[data-swipe-delete]") ?? null;
-        if (deleteButton) {
-          event.preventDefault();
-          event.stopPropagation();
-          this.activateDelete(memo, deleteButton);
-          return;
-        }
         if (target.hasClass("is-swipe-open")) {
           this.closeSwipeRows();
           return;
@@ -203,6 +204,7 @@ export class MemoList {
       });
       setIcon(deleteButton, "trash-2");
       deleteButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+      deleteButton.addEventListener("pointerup", (event) => event.stopPropagation());
       deleteButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();

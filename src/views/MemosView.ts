@@ -154,7 +154,8 @@ export class MemosView extends ItemView {
       attr: { type: "button", "aria-label": "新建 Memo" },
     });
     newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ 新建 Memo" });
-    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+" });
+    const compactNewIcon = newButton.createSpan({ cls: "obsidian-memos-toolbar__new-icon is-compact", attr: { "aria-hidden": "true" } });
+    setIcon(compactNewIcon, "plus");
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();

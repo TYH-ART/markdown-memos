@@ -1699,20 +1699,19 @@ var MemoList = class {
         return;
       }
       const eventTarget = event.target instanceof Element ? event.target : null;
-      const target = (_a = eventTarget == null ? void 0 : eventTarget.closest("[data-memo-path]")) != null ? _a : null;
+      const deleteButton = (_a = eventTarget == null ? void 0 : eventTarget.closest("[data-swipe-delete]")) != null ? _a : null;
+      if (deleteButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      const target = (_b = eventTarget == null ? void 0 : eventTarget.closest("[data-memo-path]")) != null ? _b : null;
       const path = target == null ? void 0 : target.dataset.memoPath;
       if (!path) {
         return;
       }
       const memo = this.memos.find((item) => item.file.path === path);
       if (memo) {
-        const deleteButton = (_b = eventTarget == null ? void 0 : eventTarget.closest("[data-swipe-delete]")) != null ? _b : null;
-        if (deleteButton) {
-          event.preventDefault();
-          event.stopPropagation();
-          this.activateDelete(memo, deleteButton);
-          return;
-        }
         if (target.hasClass("is-swipe-open")) {
           this.closeSwipeRows();
           return;
@@ -1846,6 +1845,7 @@ var MemoList = class {
       });
       (0, import_obsidian10.setIcon)(deleteButton, "trash-2");
       deleteButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+      deleteButton.addEventListener("pointerup", (event) => event.stopPropagation());
       deleteButton.addEventListener("click", (event) => {
         event.preventDefault();
         event.stopImmediatePropagation();
@@ -2038,7 +2038,8 @@ var MemosView = class extends import_obsidian11.ItemView {
       attr: { type: "button", "aria-label": "\u65B0\u5EFA Memo" }
     });
     newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ \u65B0\u5EFA Memo" });
-    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+" });
+    const compactNewIcon = newButton.createSpan({ cls: "obsidian-memos-toolbar__new-icon is-compact", attr: { "aria-hidden": "true" } });
+    (0, import_obsidian11.setIcon)(compactNewIcon, "plus");
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();
