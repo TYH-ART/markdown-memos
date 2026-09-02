@@ -812,7 +812,10 @@ export class MemosView extends ItemView {
     if (!this.selectedPath) return;
     const items = this.detailContentEl?.querySelectorAll<HTMLElement>(".obsidian-memos-feed-item");
     const selected = Array.from(items ?? []).find((item) => item.dataset.memoPath === this.selectedPath);
-    selected?.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
+    if (!selected || !host) return;
+    const top = Math.max(0, selected.offsetTop - host.offsetTop);
+    host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
   }
 
   private async toggleListPane(): Promise<void> {

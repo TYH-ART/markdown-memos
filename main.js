@@ -2674,11 +2674,14 @@ var MemosView = class extends import_obsidian11.ItemView {
     items == null ? void 0 : items.forEach((item) => item.toggleClass("is-selected", item.dataset.memoPath === this.selectedPath));
   }
   scrollSelectedIntoView(smooth) {
-    var _a;
+    var _a, _b;
     if (!this.selectedPath) return;
     const items = (_a = this.detailContentEl) == null ? void 0 : _a.querySelectorAll(".obsidian-memos-feed-item");
     const selected = Array.from(items != null ? items : []).find((item) => item.dataset.memoPath === this.selectedPath);
-    selected == null ? void 0 : selected.scrollIntoView({ behavior: smooth ? "smooth" : "auto", block: "start" });
+    const host = (_b = this.detailContentEl) == null ? void 0 : _b.querySelector(".obsidian-memos-detail-card-host");
+    if (!selected || !host) return;
+    const top = Math.max(0, selected.offsetTop - host.offsetTop);
+    host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
   }
   async toggleListPane() {
     if (this.isMobileLayout()) {
