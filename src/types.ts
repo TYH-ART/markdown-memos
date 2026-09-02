@@ -9,6 +9,15 @@ export interface ObsidianMemosSettings {
   defaultMemoType: MemoType;
   selectedFilter: MemoFilter;
   selectedTag: string | null;
+  memoNotebooks: MemoNotebook[];
+  activeMemoNotebookId: string;
+}
+
+export interface MemoNotebook {
+  id: string;
+  name: string;
+  private: boolean;
+  passwordHash?: string;
 }
 
 export type MemoType = "note" | "task";
@@ -25,6 +34,7 @@ export interface MemoAttachment {
 
 export interface CreateMemoOptions {
   type?: MemoType;
+  notebookId?: string;
 }
 
 export interface MemoFrontmatter {
@@ -47,6 +57,8 @@ export interface MemoRecord {
   completed: boolean;
   completedAt?: Date;
   archived: boolean;
+  notebookId: string;
+  trashedAt?: Date;
   attachments: MemoAttachment[];
   frontmatter: MemoFrontmatter;
 }

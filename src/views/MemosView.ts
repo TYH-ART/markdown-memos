@@ -5,6 +5,7 @@ import { MemoComposer } from "../components/MemoComposer";
 import { getMemoListTitle, MemoList } from "../components/MemoList";
 import { confirmMemoDeletion } from "../components/MemoDeleteModal";
 import type { MemoRecord } from "../types";
+import type { MemoNotebook } from "../types";
 import { extractMemoTagOccurrences } from "../utils";
 
 export const MEMOS_VIEW_TYPE = "obsidian-memos-view";
@@ -34,6 +35,9 @@ export class MemosView extends ItemView {
   private searchQuery = "";
   private tagSelect?: HTMLSelectElement;
   private mobileTagButton?: HTMLButtonElement;
+  private mobileNotebookList?: HTMLElement;
+  private mobileTrashButton?: HTMLButtonElement;
+  private mobileTrashToolbar?: HTMLElement;
   private sortSelect?: HTMLSelectElement;
   private sortOption: MemoSort = "modified-desc";
   // Mobile views should open on the memo feed. The sidebar is explicitly
@@ -43,6 +47,8 @@ export class MemosView extends ItemView {
   private isDraggingDivider = false;
   private editingPath?: string;
   private mobileDrawerGesture?: MobileDrawerGesture;
+  private showTrash = false;
+  private readonly unlockedNotebookIds = new Set<string>(["default"]);
 
   public constructor(
     leaf: WorkspaceLeaf,
@@ -64,6 +70,11 @@ export class MemosView extends ItemView {
   }
 
   public override async onOpen(): Promise<void> {
+    const activeNotebook = this.plugin.settings.memoNotebooks.find((item) => item.id === this.plugin.settings.activeMemoNotebookId);
+    if (activeNotebook?.private && !this.unlockedNotebookIds.has(activeNotebook.id)) {
+      this.plugin.settings.activeMemoNotebookId = "default";
+      await this.plugin.saveSettings();
+    }
     this.contentEl.empty();
     this.contentEl.addClass("obsidian-memos-view");
     this.buildLayout();
@@ -77,6 +88,9 @@ export class MemosView extends ItemView {
     this.memoList = undefined;
     this.folderLabel = undefined;
     this.mobileTagButton = undefined;
+    this.mobileNotebookList = undefined;
+    this.mobileTrashButton = undefined;
+    this.mobileTrashToolbar = undefined;
     this.contentEl.empty();
   }
 
@@ -92,6 +106,7 @@ export class MemosView extends ItemView {
       this.allMemos = this.sortMemos(memos);
 
       this.folderLabel?.setText(this.plugin.repository.folder);
+      this.renderMobileLibrary();
       this.updateTagOptions();
       await this.applyCurrentFilters(preferredPath, sequence);
     } catch (error) {
@@ -183,6 +198,25 @@ export class MemosView extends ItemView {
 
     this.splitEl = page.createDiv({ cls: "obsidian-memos-split" });
     const listPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-list-pane" });
+    const mobileLibrary = listPaneEl.createDiv({ cls: "obsidian-memos-mobile-library" });
+    const mobileLibraryHeader = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__header" });
+    mobileLibraryHeader.createEl("strong", { text: "备忘录" });
+    const addNotebookButton = mobileLibraryHeader.createEl("button", {
+      cls: "clickable-icon obsidian-memos-mobile-library__add",
+      attr: { type: "button", "aria-label": "新建备忘录", title: "新建备忘录" },
+    });
+    setIcon(addNotebookButton, "plus");
+    this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
+    this.mobileNotebookList = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__list" });
+    this.mobileTrashButton = mobileLibrary.createEl("button", {
+      cls: "obsidian-memos-mobile-library__trash",
+      attr: { type: "button" },
+    });
+    const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
+    setIcon(trashIcon, "trash-2");
+    this.mobileTrashButton.createSpan({ text: "回收站" });
+    this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
+    this.renderMobileLibrary();
     const listHeader = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__header" });
     const listTopButton = listHeader.createEl("button", {
       cls: "clickable-icon obsidian-memos-pane-top",
@@ -228,6 +262,10 @@ export class MemosView extends ItemView {
 
     const detailPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-detail-pane" });
     this.detailContentEl = detailPaneEl.createDiv({ cls: "obsidian-memos-detail-pane__content" });
+    this.mobileTrashToolbar = this.detailContentEl.createDiv({ cls: "obsidian-memos-mobile-trash-toolbar" });
+    this.mobileTrashToolbar.createEl("strong", { text: "回收站" });
+    const emptyTrashButton = this.mobileTrashToolbar.createEl("button", { text: "清空回收站", attr: { type: "button" } });
+    this.registerDomEvent(emptyTrashButton, "click", () => void this.emptyTrash());
     const composerHost = this.detailContentEl.createDiv({ cls: "obsidian-memos-composer-host" });
     new MemoComposer(
       this,
@@ -242,6 +280,7 @@ export class MemosView extends ItemView {
         attachmentService: this.plugin.attachmentService,
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
+        getNotebookId: () => this.isMobileLayout() ? this.plugin.settings.activeMemoNotebookId : undefined,
       },
     );
     this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-card-host" });
@@ -261,6 +300,94 @@ export class MemosView extends ItemView {
     this.updateLayoutState();
   }
 
+  private renderMobileLibrary(): void {
+    if (!this.mobileNotebookList) return;
+    this.mobileNotebookList.empty();
+    const activeId = this.plugin.settings.activeMemoNotebookId;
+    for (const notebook of this.plugin.settings.memoNotebooks) {
+      const button = this.mobileNotebookList.createEl("button", {
+        cls: `obsidian-memos-mobile-library__item${!this.showTrash && notebook.id === activeId ? " is-active" : ""}`,
+        attr: { type: "button" },
+      });
+      const icon = button.createSpan({ cls: "obsidian-memos-mobile-library__item-icon", attr: { "aria-hidden": "true" } });
+      setIcon(icon, notebook.private ? "lock" : "notebook-tabs");
+      button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
+      this.registerDomEvent(button, "click", () => void this.selectNotebook(notebook));
+    }
+    this.mobileTrashButton?.toggleClass("is-active", this.showTrash);
+  }
+
+  private async createNotebook(): Promise<void> {
+    const name = window.prompt("备忘录名称");
+    if (!name?.trim()) return;
+    const isPrivate = window.confirm("是否创建为私密备忘录？");
+    let passwordHash: string | undefined;
+    if (isPrivate) {
+      const password = window.prompt("设置访问密码");
+      if (!password) return;
+      const confirmation = window.prompt("再次输入密码");
+      if (confirmation !== password) {
+        new Notice("两次输入的密码不一致");
+        return;
+      }
+      passwordHash = await hashNotebookPassword(password);
+    }
+    const notebook: MemoNotebook = {
+      id: `notebook-${Date.now().toString(36)}`,
+      name: name.trim(),
+      private: isPrivate,
+      passwordHash,
+    };
+    this.plugin.settings.memoNotebooks.push(notebook);
+    if (!isPrivate) this.unlockedNotebookIds.add(notebook.id);
+    await this.plugin.saveSettings();
+    this.renderMobileLibrary();
+    await this.selectNotebook(notebook);
+  }
+
+  private async selectNotebook(notebook: MemoNotebook): Promise<void> {
+    if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
+      if (!notebook.passwordHash) {
+        const password = window.prompt(`为“${notebook.name}”设置密码`);
+        if (!password) return;
+        const confirmation = window.prompt("再次输入密码");
+        if (confirmation !== password) {
+          new Notice("两次输入的密码不一致");
+          return;
+        }
+        notebook.passwordHash = await hashNotebookPassword(password);
+        await this.plugin.saveSettings();
+      } else {
+        const password = window.prompt(`输入“${notebook.name}”的密码`);
+        if (!password || await hashNotebookPassword(password) !== notebook.passwordHash) {
+          new Notice("密码错误");
+          return;
+        }
+      }
+      this.unlockedNotebookIds.add(notebook.id);
+    }
+    this.plugin.settings.activeMemoNotebookId = notebook.id;
+    this.showTrash = false;
+    this.mobileDetail = true;
+    this.searchQuery = "";
+    await this.plugin.saveSettings();
+    this.renderMobileLibrary();
+    await this.refresh();
+  }
+
+  private async openTrash(): Promise<void> {
+    this.showTrash = true;
+    this.mobileDetail = true;
+    this.renderMobileLibrary();
+    await this.applyCurrentFilters();
+  }
+
+  private async emptyTrash(): Promise<void> {
+    if (!window.confirm("确定永久清空当前备忘录的回收站吗？此操作无法撤销。")) return;
+    await this.plugin.repository.emptyTrash();
+    await this.refresh();
+  }
+
   private async renderDetail(sequence: number): Promise<void> {
     const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
     if (!host || sequence !== this.refreshSequence) {
@@ -271,8 +398,8 @@ export class MemosView extends ItemView {
 
     if (this.memos.length === 0) {
       const empty = host.createDiv({ cls: "obsidian-memos-detail-empty" });
-      empty.createEl("h2", { text: "暂无 Memo" });
-      empty.createEl("p", { text: "点击“+ 新建 Memo”开始记录。" });
+      empty.createEl("h2", { text: this.showTrash ? "回收站为空" : "暂无 Memo" });
+      if (!this.showTrash) empty.createEl("p", { text: "在上方输入框开始记录。" });
       return;
     }
 
@@ -280,6 +407,18 @@ export class MemosView extends ItemView {
       if (sequence !== this.refreshSequence) return;
       const item = host.createDiv({ cls: `obsidian-memos-feed-item${memo.file.path === this.selectedPath ? " is-selected" : ""}` });
       item.dataset.memoPath = memo.file.path;
+      if (this.showTrash && this.isMobileLayout()) {
+        const restoreButton = item.createEl("button", {
+          cls: "obsidian-memos-mobile-restore",
+          attr: { type: "button", "aria-label": "还原 Memo", title: "还原 Memo" },
+        });
+        setIcon(restoreButton, "rotate-ccw");
+        this.registerDomEvent(restoreButton, "click", async (event: MouseEvent) => {
+          event.stopPropagation();
+          await this.plugin.repository.restoreMemo(memo.file);
+          await this.refresh();
+        });
+      }
       const card = new MemoCard(this.app, this, item, this.plugin.repository, memo, {
         onChanged: () => this.refresh(memo.file.path),
         attachmentService: this.plugin.attachmentService,
@@ -288,6 +427,7 @@ export class MemosView extends ItemView {
         },
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
+        trashMode: this.showTrash,
       });
       this.detailCards.push(card);
       await card.render();
@@ -307,7 +447,20 @@ export class MemosView extends ItemView {
     const query = this.searchQuery.trim().toLocaleLowerCase();
     const selectedTag = this.plugin.settings.selectedTag;
     const selectedFilter = this.plugin.settings.selectedFilter;
+    const activeNotebookId = this.plugin.settings.activeMemoNotebookId;
+    const filterByNotebook = this.isMobileLayout();
     this.memos = this.allMemos.filter((memo) => {
+      if (filterByNotebook && !this.showTrash && memo.notebookId !== activeNotebookId) return false;
+      if (this.showTrash) {
+        if (!memo.trashedAt) return false;
+      } else if (memo.trashedAt) {
+        return false;
+      }
+      if (this.showTrash) {
+        if (!query) return true;
+        const trashHaystack = [memo.content, memo.file.basename, ...memo.tags].join("\n").toLocaleLowerCase();
+        return trashHaystack.includes(query);
+      }
       if (selectedFilter === "archived") {
         if (!memo.archived) return false;
       } else if (memo.archived) {
@@ -457,10 +610,12 @@ export class MemosView extends ItemView {
   }
 
   private async deleteMemoFromList(memo: MemoRecord, keepMobileListOpen = false): Promise<void> {
-    if (!(await confirmMemoDeletion(this.app, memo))) return;
+    const mobile = this.isMobileLayout();
+    if (!mobile && !(await confirmMemoDeletion(this.app, memo))) return;
     try {
-      await this.plugin.repository.deleteMemo(memo.file);
-      if (keepMobileListOpen && this.isMobileLayout()) {
+      if (mobile) await this.plugin.repository.trashMemo(memo.file);
+      else await this.plugin.repository.deleteMemo(memo.file);
+      if (keepMobileListOpen && mobile) {
         this.mobileDetail = false;
       }
       await this.refresh();
@@ -552,6 +707,8 @@ export class MemosView extends ItemView {
     this.contentEl.toggleClass("is-list-collapsed", this.plugin.settings.listPaneCollapsed);
     this.contentEl.toggleClass("is-mobile", this.isMobileLayout());
     this.contentEl.toggleClass("is-mobile-detail", this.mobileDetail);
+    this.contentEl.toggleClass("is-trash-mode", this.showTrash && this.isMobileLayout());
+    this.mobileTrashToolbar?.toggleClass("is-visible", this.showTrash && this.isMobileLayout());
     this.splitEl.setCssProps({ "--memos-list-width": `${this.plugin.settings.listPaneWidth}px` });
   }
 
@@ -674,4 +831,10 @@ function isMemoSort(value: string | undefined): value is MemoSort {
 
 function isFilterValue(value: string): value is "all" | "note" | "task-open" | "task-completed" | "archived" {
   return value === "all" || value === "note" || value === "task-open" || value === "task-completed" || value === "archived";
+}
+
+async function hashNotebookPassword(password: string): Promise<string> {
+  const bytes = new TextEncoder().encode(password);
+  const digest = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(digest), (value) => value.toString(16).padStart(2, "0")).join("");
 }

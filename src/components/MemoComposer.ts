@@ -28,6 +28,7 @@ export class MemoComposer {
   private memoType: MemoType;
   private readonly taskButton: HTMLButtonElement;
   private readonly isMobileLayout: () => boolean;
+  private readonly getNotebookId: () => string | undefined;
 
   public constructor(
     owner: Component,
@@ -39,12 +40,14 @@ export class MemoComposer {
       attachmentService?: AttachmentService;
       getPopularTags?: () => string[];
       isMobileLayout?: () => boolean;
+      getNotebookId?: () => string | undefined;
     } = {},
   ) {
     this.container = container;
     this.memoType = options.defaultType ?? "note";
     this.attachmentService = options.attachmentService;
     this.isMobileLayout = options.isMobileLayout ?? (() => false);
+    this.getNotebookId = options.getNotebookId ?? (() => undefined);
     const composer = container.createDiv({ cls: "obsidian-memos-composer" });
     this.composerEl = composer;
     const titleField = composer.createDiv({ cls: "obsidian-memos-composer__field is-title" });
@@ -172,7 +175,10 @@ export class MemoComposer {
 
     this.setSubmitting(true);
     try {
-      let memo = await this.repository.createMemo(content, { type: this.memoType });
+      let memo = await this.repository.createMemo(content, {
+        type: this.memoType,
+        notebookId: this.getNotebookId(),
+      });
       await this.persistPendingAttachments(memo);
       memo = await this.repository.getMemo(memo.file);
       this.titleInput.value = "";

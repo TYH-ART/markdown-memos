@@ -51,6 +51,8 @@ export class MemoRepository {
         completed: false,
         completedAt: null,
         attachments: [],
+        notebookId: options.notebookId ?? "default",
+        trashedAt: null,
       },
       content,
       false,
@@ -89,6 +91,28 @@ export class MemoRepository {
     }
 
     await this.app.fileManager.trashFile(currentFile);
+  }
+
+  public async trashMemo(file: TFile): Promise<MemoRecord> {
+    const currentFile = this.requireFile(file);
+    await this.updateFrontmatter(currentFile, (frontmatter) => {
+      frontmatter.trashedAt = formatLocalIso(new Date());
+    });
+    return this.readMemo(currentFile);
+  }
+
+  public async restoreMemo(file: TFile): Promise<MemoRecord> {
+    const currentFile = this.requireFile(file);
+    await this.updateFrontmatter(currentFile, (frontmatter) => {
+      frontmatter.trashedAt = null;
+    });
+    return this.readMemo(currentFile);
+  }
+
+  public async emptyTrash(notebookId?: string): Promise<void> {
+    const memos = await this.getMemos();
+    const trashed = memos.filter((memo) => memo.trashedAt && (!notebookId || memo.notebookId === notebookId));
+    for (const memo of trashed) await this.deleteMemo(memo.file);
   }
 
   public async togglePinned(file: TFile): Promise<MemoRecord> {
@@ -220,6 +244,10 @@ export class MemoRepository {
       completed: type === "task" && parsed.frontmatter.completed === true,
       completedAt: this.parseDate(parsed.frontmatter.completedAt),
       archived: parsed.frontmatter.archived === true,
+      notebookId: typeof parsed.frontmatter.notebookId === "string" && parsed.frontmatter.notebookId
+        ? parsed.frontmatter.notebookId
+        : "default",
+      trashedAt: this.parseDate(parsed.frontmatter.trashedAt),
       attachments: this.parseAttachments(parsed.frontmatter.attachments),
       frontmatter: parsed.frontmatter,
     };

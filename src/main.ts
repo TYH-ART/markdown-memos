@@ -15,6 +15,11 @@ const DEFAULT_SETTINGS: ObsidianMemosSettings = {
   defaultMemoType: "note",
   selectedFilter: "all",
   selectedTag: null,
+  memoNotebooks: [
+    { id: "default", name: "备忘录 1", private: false },
+    { id: "private", name: "私密备忘录", private: true },
+  ],
+  activeMemoNotebookId: "default",
 };
 
 export default class ObsidianMemosPlugin extends Plugin {
@@ -113,7 +118,14 @@ export default class ObsidianMemosPlugin extends Plugin {
       defaultMemoType: saved?.defaultMemoType === "task" ? "task" : "note",
       selectedFilter: isMemoFilter(saved?.selectedFilter) ? saved.selectedFilter : "all",
       selectedTag: typeof saved?.selectedTag === "string" && saved.selectedTag ? saved.selectedTag : null,
+      memoNotebooks: normalizeNotebooks(saved?.memoNotebooks),
+      activeMemoNotebookId: typeof saved?.activeMemoNotebookId === "string" && saved.activeMemoNotebookId
+        ? saved.activeMemoNotebookId
+        : "default",
     };
+    if (!this.settings.memoNotebooks.some((notebook) => notebook.id === this.settings.activeMemoNotebookId)) {
+      this.settings.activeMemoNotebookId = this.settings.memoNotebooks[0]?.id ?? "default";
+    }
   }
 
   private handleVaultChange(file: TAbstractFile): void {
@@ -129,6 +141,24 @@ export default class ObsidianMemosPlugin extends Plugin {
   private isRelevantPath(path: string): boolean {
     return isPathInsideFolder(path, this.settings.memoFolder);
   }
+}
+
+function normalizeNotebooks(value: unknown): ObsidianMemosSettings["memoNotebooks"] {
+  if (!Array.isArray(value)) return DEFAULT_SETTINGS.memoNotebooks.map((item) => ({ ...item }));
+  const notebooks = value.flatMap((item) => {
+    if (!item || typeof item !== "object") return [];
+    const candidate = item as Record<string, unknown>;
+    if (typeof candidate.id !== "string" || !candidate.id || typeof candidate.name !== "string" || !candidate.name.trim()) return [];
+    return [{
+      id: candidate.id,
+      name: candidate.name.trim(),
+      private: candidate.private === true,
+      passwordHash: typeof candidate.passwordHash === "string" && candidate.passwordHash ? candidate.passwordHash : undefined,
+    }];
+  });
+  if (!notebooks.some((item) => item.id === "default")) notebooks.unshift({ id: "default", name: "备忘录 1", private: false, passwordHash: undefined });
+  if (!notebooks.some((item) => item.id === "private")) notebooks.push({ id: "private", name: "私密备忘录", private: true, passwordHash: undefined });
+  return notebooks;
 }
 
 function isMemoFilter(value: unknown): value is ObsidianMemosSettings["selectedFilter"] {

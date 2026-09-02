@@ -14,9 +14,11 @@ export interface MemoCardOptions {
   onEditingChange?: (editing: boolean) => void;
   getPopularTags?: () => string[];
   isMobileLayout?: () => boolean;
+  trashMode?: boolean;
 }
 
 export class MemoCard {
+  private readonly container: HTMLElement;
   private readonly article: HTMLElement;
   private readonly display: HTMLElement;
   private markdownChild?: MarkdownRenderChild;
@@ -28,6 +30,9 @@ export class MemoCard {
   private editorTagTarget?: HTMLInputElement | HTMLTextAreaElement;
   private lastPersistedContent?: string;
   private finishingEdit = false;
+  private deleteArmed = false;
+  private readonly deleteButton: HTMLButtonElement;
+  private cardSwipe?: { pointerId: number; startX: number; startY: number; offset: number; horizontal: boolean };
 
   public constructor(
     private readonly app: App,
@@ -37,6 +42,7 @@ export class MemoCard {
     private readonly memo: MemoRecord,
     private readonly options: MemoCardOptions,
   ) {
+    this.container = container;
     const isTitleless = !splitMemoContent(memo.content).title.trim();
     this.article = container.createEl("article", {
       cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}${isTitleless ? " is-titleless" : ""}`,
@@ -70,10 +76,15 @@ export class MemoCard {
       onSelect: (tag) => void this.addTag(tag),
     });
     const deleteButton = createIconButton(actions, "trash-2", "删除 Memo");
+    this.deleteButton = deleteButton;
+    deleteButton.toggleClass("is-hidden", options.trashMode === true);
     const readingCloseButton = createIconButton(actions, "x", "退出阅读模式");
     readingCloseButton.addClass("obsidian-memos-card__reading-close");
     owner.registerDomEvent(pinButton, "click", () => void this.togglePinned());
-    owner.registerDomEvent(deleteButton, "click", () => void this.deleteMemo());
+    owner.registerDomEvent(deleteButton, "click", (event: MouseEvent) => {
+      event.stopPropagation();
+      void this.handleDeleteClick();
+    });
     owner.registerDomEvent(readingCloseButton, "click", () => this.exitReadingMode());
     owner.registerDomEvent(this.article, "contextmenu", (event: MouseEvent) => {
       const target = event.target;
@@ -115,6 +126,20 @@ export class MemoCard {
     this.article.tabIndex = -1;
 
     this.display = this.article.createDiv({ cls: "obsidian-memos-card__display" });
+    const swipeDeleteButton = container.createEl("button", {
+      cls: "obsidian-memos-feed-item__swipe-delete",
+      attr: { type: "button", "aria-label": "移入回收站", title: "移入回收站" },
+    });
+    setIcon(swipeDeleteButton, "trash-2");
+    owner.registerDomEvent(swipeDeleteButton, "click", (event: MouseEvent) => {
+      event.preventDefault();
+      event.stopPropagation();
+      void this.trashImmediately();
+    });
+    owner.registerDomEvent(this.article, "pointerdown", (event: PointerEvent) => this.startCardSwipe(event));
+    owner.registerDomEvent(this.article, "pointermove", (event: PointerEvent) => this.moveCardSwipe(event));
+    owner.registerDomEvent(this.article, "pointerup", (event: PointerEvent) => this.finishCardSwipe(event));
+    owner.registerDomEvent(this.article, "pointercancel", () => this.cancelCardSwipe());
   }
 
   public async render(): Promise<void> {
@@ -206,7 +231,7 @@ export class MemoCard {
     const bodyMirror = bodyField.createDiv({ cls: "obsidian-memos-card__editor-mirror" });
     const textarea = bodyField.createEl("textarea", {
       cls: "obsidian-memos-card__editor",
-      attr: { rows: "8", "aria-label": "编辑 Memo 内容", placeholder: "" },
+      attr: { rows: this.options.isMobileLayout?.() ? "1" : "8", "aria-label": "编辑 Memo 内容", placeholder: "" },
     });
     textarea.value = parts.body;
     this.renderEditorMirror(titleMirror, titleInput.value);
@@ -222,10 +247,7 @@ export class MemoCard {
       this.scheduleAutoSave(content);
       titleInput.setCssProps({ height: "auto" });
       titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
-      if (this.options.isMobileLayout?.()) {
-        textarea.setCssProps({ height: "auto" });
-        textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
-      }
+      this.resizeMobileBodyEditor(textarea);
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -249,10 +271,7 @@ export class MemoCard {
     this.renderDetectedLinks(links, this.memo.content);
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
-    if (this.options.isMobileLayout?.()) {
-      textarea.setCssProps({ height: "auto" });
-      textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
-    }
+    this.resizeMobileBodyEditor(textarea);
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
     initialTarget.focus();
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
@@ -261,6 +280,14 @@ export class MemoCard {
   private enterReadingMode(): void {
     this.article.addClass("is-reading-mode");
     this.article.focus({ preventScroll: true });
+  }
+
+  private resizeMobileBodyEditor(textarea: HTMLTextAreaElement): void {
+    if (!this.options.isMobileLayout?.()) return;
+    textarea.setCssProps({ height: "0px" });
+    const computed = window.getComputedStyle(textarea);
+    const lineHeight = Number.parseFloat(computed.lineHeight) || 26;
+    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight * 2)}px` });
   }
 
   private exitReadingMode(): void {
@@ -411,6 +438,10 @@ export class MemoCard {
   }
 
   private async deleteMemo(): Promise<void> {
+    if (this.options.isMobileLayout?.()) {
+      await this.trashImmediately();
+      return;
+    }
     if (!(await confirmMemoDeletion(this.app, this.memo))) return;
     try {
       await this.repository.deleteMemo(this.memo.file);
@@ -419,6 +450,79 @@ export class MemoCard {
       console.error(`[Markdown Memos] 删除失败：${this.memo.file.path}`, error);
       new Notice(`删除 Memo 失败：${errorMessage(error)}`);
     }
+  }
+
+  private async handleDeleteClick(): Promise<void> {
+    if (!this.options.isMobileLayout?.()) {
+      await this.deleteMemo();
+      return;
+    }
+    if (!this.deleteArmed) {
+      this.deleteArmed = true;
+      this.deleteButton.addClass("is-delete-armed");
+      this.deleteButton.setAttr("aria-label", "再次点击移入回收站");
+      return;
+    }
+    await this.trashImmediately();
+  }
+
+  private async trashImmediately(): Promise<void> {
+    try {
+      await this.repository.trashMemo(this.memo.file);
+      await this.options.onChanged();
+    } catch (error) {
+      console.error(`[Markdown Memos] 移入回收站失败：${this.memo.file.path}`, error);
+      new Notice(`移入回收站失败：${errorMessage(error)}`);
+    }
+  }
+
+  private startCardSwipe(event: PointerEvent): void {
+    if (!this.options.isMobileLayout?.() || this.options.trashMode || !event.isPrimary || event.button !== 0) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("button, input, textarea, select, a")) return;
+    this.cardSwipe = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offset: this.container.hasClass("is-swipe-open") ? -72 : 0,
+      horizontal: false,
+    };
+  }
+
+  private moveCardSwipe(event: PointerEvent): void {
+    const swipe = this.cardSwipe;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    const deltaX = event.clientX - swipe.startX;
+    const deltaY = event.clientY - swipe.startY;
+    if (!swipe.horizontal) {
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 6) return;
+      if (Math.abs(deltaY) >= Math.abs(deltaX)) {
+        this.cardSwipe = undefined;
+        return;
+      }
+      swipe.horizontal = true;
+      this.article.setPointerCapture(event.pointerId);
+      this.container.addClass("is-swiping");
+    }
+    event.preventDefault();
+    swipe.offset = Math.max(-72, Math.min(0, (this.container.hasClass("is-swipe-open") ? -72 : 0) + deltaX));
+    this.article.style.setProperty("--memos-card-swipe-offset", `${swipe.offset}px`);
+  }
+
+  private finishCardSwipe(event: PointerEvent): void {
+    const swipe = this.cardSwipe;
+    if (!swipe || event.pointerId !== swipe.pointerId) return;
+    this.cardSwipe = undefined;
+    this.container.removeClass("is-swiping");
+    this.article.style.removeProperty("--memos-card-swipe-offset");
+    if (swipe.horizontal) this.container.toggleClass("is-swipe-open", swipe.offset <= -36);
+    if (this.article.hasPointerCapture(event.pointerId)) this.article.releasePointerCapture(event.pointerId);
+  }
+
+  private cancelCardSwipe(): void {
+    this.cardSwipe = undefined;
+    this.container.removeClass("is-swiping");
+    this.article.style.removeProperty("--memos-card-swipe-offset");
   }
 
   private async runAction(label: string, action: () => Promise<MemoRecord>): Promise<void> {
