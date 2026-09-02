@@ -211,7 +211,7 @@ export class MemoCard {
     const bodyMirror = bodyField.createDiv({ cls: "obsidian-memos-card__editor-mirror" });
     const textarea = bodyField.createEl("textarea", {
       cls: "obsidian-memos-card__editor",
-      attr: { rows: this.options.isMobileLayout?.() ? "1" : "8", "aria-label": "编辑 Memo 内容", placeholder: "" },
+      attr: { rows: "1", "aria-label": "编辑 Memo 内容", placeholder: "" },
     });
     textarea.value = parts.body;
     this.renderEditorMirror(titleMirror, titleInput.value);
@@ -272,7 +272,6 @@ export class MemoCard {
   }
 
   private resizeMobileBodyEditor(textarea: HTMLTextAreaElement): void {
-    if (!this.options.isMobileLayout?.()) return;
     textarea.setCssProps({ height: "0px" });
     const computed = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computed.lineHeight) || 26;

@@ -1162,7 +1162,7 @@ var MemoCard = class {
     );
   }
   async startEditing(tagToInsert) {
-    var _a, _b, _c, _d, _e, _f;
+    var _a, _b, _c, _d;
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
@@ -1188,7 +1188,7 @@ var MemoCard = class {
     const bodyMirror = bodyField.createDiv({ cls: "obsidian-memos-card__editor-mirror" });
     const textarea = bodyField.createEl("textarea", {
       cls: "obsidian-memos-card__editor",
-      attr: { rows: ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) ? "1" : "8", "aria-label": "\u7F16\u8F91 Memo \u5185\u5BB9", placeholder: "" }
+      attr: { rows: "1", "aria-label": "\u7F16\u8F91 Memo \u5185\u5BB9", placeholder: "" }
     });
     textarea.value = parts.body;
     this.renderEditorMirror(titleMirror, titleInput.value);
@@ -1231,7 +1231,7 @@ var MemoCard = class {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
-    if ((_f = (_e = this.options).isMobileLayout) == null ? void 0 : _f.call(_e)) {
+    if ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) {
       new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
         this.display,
         this.memo.attachments
@@ -1249,8 +1249,6 @@ var MemoCard = class {
     this.article.focus({ preventScroll: true });
   }
   resizeMobileBodyEditor(textarea) {
-    var _a, _b;
-    if (!((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a))) return;
     textarea.setCssProps({ height: "0px" });
     const computed = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computed.lineHeight) || 26;
@@ -1636,7 +1634,7 @@ var MemoComposer = class {
     this.submitButton.disabled = this.submitting || !this.titleInput.value.trim() && !this.textarea.value.trim();
   }
   expandMobileComposer() {
-    if (this.isMobileLayout()) this.composerEl.addClass("is-mobile-expanded");
+    this.composerEl.addClass("is-mobile-expanded");
   }
   updateTaskButton() {
     const isTask = this.memoType === "task";
@@ -2415,7 +2413,7 @@ var MemosView = class extends import_obsidian11.ItemView {
       if (sequence !== this.refreshSequence) return;
       const item = host.createDiv({ cls: `obsidian-memos-feed-item${memo.file.path === this.selectedPath ? " is-selected" : ""}` });
       item.dataset.memoPath = memo.file.path;
-      if (this.showTrash && this.isMobileLayout()) {
+      if (this.showTrash) {
         const restoreButton = item.createEl("button", {
           cls: "obsidian-memos-mobile-restore",
           attr: { type: "button", "aria-label": "\u8FD8\u539F Memo", title: "\u8FD8\u539F Memo" }
@@ -2456,7 +2454,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     const selectedTag = this.plugin.settings.selectedTag;
     const selectedFilter = this.plugin.settings.selectedFilter;
     const activeNotebookId = this.plugin.settings.activeMemoNotebookId;
-    const filterByNotebook = this.isMobileLayout();
+    const filterByNotebook = true;
     this.memos = this.allMemos.filter((memo) => {
       if (filterByNotebook && !this.showTrash && memo.notebookId !== activeNotebookId) return false;
       if (this.showTrash) {
@@ -2702,8 +2700,8 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.contentEl.toggleClass("is-list-collapsed", this.plugin.settings.listPaneCollapsed);
     this.contentEl.toggleClass("is-mobile", this.isMobileLayout());
     this.contentEl.toggleClass("is-mobile-detail", this.mobileDetail);
-    this.contentEl.toggleClass("is-trash-mode", this.showTrash && this.isMobileLayout());
-    (_a = this.mobileTrashToolbar) == null ? void 0 : _a.toggleClass("is-visible", this.showTrash && this.isMobileLayout());
+    this.contentEl.toggleClass("is-trash-mode", this.showTrash);
+    (_a = this.mobileTrashToolbar) == null ? void 0 : _a.toggleClass("is-visible", this.showTrash);
     this.splitEl.setCssProps({ "--memos-list-width": `${this.plugin.settings.listPaneWidth}px` });
   }
   isMobileLayout() {

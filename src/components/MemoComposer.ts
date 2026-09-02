@@ -215,7 +215,7 @@ export class MemoComposer {
   }
 
   private expandMobileComposer(): void {
-    if (this.isMobileLayout()) this.composerEl.addClass("is-mobile-expanded");
+    this.composerEl.addClass("is-mobile-expanded");
   }
 
   private updateTaskButton(): void {

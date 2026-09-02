@@ -534,7 +534,7 @@ export class MemosView extends ItemView {
       if (sequence !== this.refreshSequence) return;
       const item = host.createDiv({ cls: `obsidian-memos-feed-item${memo.file.path === this.selectedPath ? " is-selected" : ""}` });
       item.dataset.memoPath = memo.file.path;
-      if (this.showTrash && this.isMobileLayout()) {
+      if (this.showTrash) {
         const restoreButton = item.createEl("button", {
           cls: "obsidian-memos-mobile-restore",
           attr: { type: "button", "aria-label": "还原 Memo", title: "还原 Memo" },
@@ -575,7 +575,7 @@ export class MemosView extends ItemView {
     const selectedTag = this.plugin.settings.selectedTag;
     const selectedFilter = this.plugin.settings.selectedFilter;
     const activeNotebookId = this.plugin.settings.activeMemoNotebookId;
-    const filterByNotebook = this.isMobileLayout();
+    const filterByNotebook = true;
     this.memos = this.allMemos.filter((memo) => {
       if (filterByNotebook && !this.showTrash && memo.notebookId !== activeNotebookId) return false;
       if (this.showTrash) {
@@ -837,8 +837,8 @@ export class MemosView extends ItemView {
     this.contentEl.toggleClass("is-list-collapsed", this.plugin.settings.listPaneCollapsed);
     this.contentEl.toggleClass("is-mobile", this.isMobileLayout());
     this.contentEl.toggleClass("is-mobile-detail", this.mobileDetail);
-    this.contentEl.toggleClass("is-trash-mode", this.showTrash && this.isMobileLayout());
-    this.mobileTrashToolbar?.toggleClass("is-visible", this.showTrash && this.isMobileLayout());
+    this.contentEl.toggleClass("is-trash-mode", this.showTrash);
+    this.mobileTrashToolbar?.toggleClass("is-visible", this.showTrash);
     this.splitEl.setCssProps({ "--memos-list-width": `${this.plugin.settings.listPaneWidth}px` });
   }
 
