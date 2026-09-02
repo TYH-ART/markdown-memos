@@ -1060,15 +1060,15 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
 }
 
 .is-mobile .obsidian-memos-toolbar {
-  position: relative;
+  position: absolute;
   z-index: 10;
-  top: 0;
-  right: auto;
-  left: auto;
-  width: 100%;
+  top: calc(0px - var(--header-height, 50px) + 10px);
+  right: max(10px, env(safe-area-inset-right));
+  left: 68px;
+  width: auto;
   height: 40px;
   min-height: 40px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
   gap: 8px;
   padding-bottom: 0;
   border-bottom: 0;
@@ -1226,7 +1226,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   position: relative;
   isolation: isolate;
   touch-action: pan-y;
-  margin-top: -4px;
+  margin-top: 8px;
   border: 0;
   border-radius: 0;
 }
