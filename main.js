@@ -1171,7 +1171,7 @@ var MemoCard = class {
     );
   }
   async startEditing(tagToInsert) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c, _d, _e, _f;
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
@@ -1240,6 +1240,12 @@ var MemoCard = class {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
+    if ((_f = (_e = this.options).isMobileLayout) == null ? void 0 : _f.call(_e)) {
+      new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+        this.display,
+        this.memo.attachments
+      );
+    }
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     this.resizeMobileBodyEditor(textarea);
@@ -2097,6 +2103,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.refreshSequence = 0;
     this.isDraggingDivider = false;
     this.showTrash = false;
+    this.expandedNotebookId = "default";
     this.unlockedNotebookIds = /* @__PURE__ */ new Set(["default"]);
   }
   getViewType() {
@@ -2335,7 +2342,8 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.mobileNotebookList.empty();
     const activeId = this.plugin.settings.activeMemoNotebookId;
     for (const notebook of this.plugin.settings.memoNotebooks) {
-      const button = this.mobileNotebookList.createEl("button", {
+      const row = this.mobileNotebookList.createDiv({ cls: "obsidian-memos-mobile-library__row" });
+      const button = row.createEl("button", {
         cls: `obsidian-memos-mobile-library__item${!this.showTrash && notebook.id === activeId ? " is-active" : ""}`,
         attr: { type: "button" }
       });
@@ -2343,8 +2351,36 @@ var MemosView = class extends import_obsidian11.ItemView {
       (0, import_obsidian11.setIcon)(icon, notebook.private ? "lock" : "notebook-tabs");
       button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
       this.registerDomEvent(button, "click", () => void this.selectNotebook(notebook));
+      const expandButton = row.createEl("button", {
+        cls: "clickable-icon obsidian-memos-mobile-library__expand",
+        attr: { type: "button", "aria-label": "\u5C55\u5F00\u5907\u5FD8\u5F55\u5185\u5BB9", title: "\u5C55\u5F00\u5907\u5FD8\u5F55\u5185\u5BB9" }
+      });
+      const expanded = this.expandedNotebookId === notebook.id && !this.showTrash;
+      (0, import_obsidian11.setIcon)(expandButton, expanded ? "chevron-down" : "chevron-right");
+      this.registerDomEvent(expandButton, "click", (event) => {
+        event.stopPropagation();
+        this.expandedNotebookId = expanded ? "" : notebook.id;
+        this.renderMobileLibrary();
+      });
+      if (expanded) this.renderNotebookContents(row, notebook.id);
     }
     (_a = this.mobileTrashButton) == null ? void 0 : _a.toggleClass("is-active", this.showTrash);
+  }
+  renderNotebookContents(container, notebookId) {
+    const contents = container.createDiv({ cls: "obsidian-memos-mobile-library__contents" });
+    const memos = this.allMemos.filter((memo) => memo.notebookId === notebookId && !memo.trashedAt);
+    if (memos.length === 0) {
+      contents.createDiv({ cls: "obsidian-memos-mobile-library__contents-empty", text: "\u6682\u65E0\u5185\u5BB9" });
+      return;
+    }
+    for (const memo of memos.slice(0, 30)) {
+      const button = contents.createEl("button", { text: getMemoListTitle(memo.content), attr: { type: "button" } });
+      this.registerDomEvent(button, "click", () => {
+        this.showTrash = false;
+        this.mobileDetail = true;
+        this.selectMemo(memo);
+      });
+    }
   }
   async createNotebook() {
     const name = window.prompt("\u5907\u5FD8\u5F55\u540D\u79F0");

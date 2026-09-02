@@ -48,6 +48,7 @@ export class MemosView extends ItemView {
   private editingPath?: string;
   private mobileDrawerGesture?: MobileDrawerGesture;
   private showTrash = false;
+  private expandedNotebookId = "default";
   private readonly unlockedNotebookIds = new Set<string>(["default"]);
 
   public constructor(
@@ -306,7 +307,8 @@ export class MemosView extends ItemView {
     this.mobileNotebookList.empty();
     const activeId = this.plugin.settings.activeMemoNotebookId;
     for (const notebook of this.plugin.settings.memoNotebooks) {
-      const button = this.mobileNotebookList.createEl("button", {
+      const row = this.mobileNotebookList.createDiv({ cls: "obsidian-memos-mobile-library__row" });
+      const button = row.createEl("button", {
         cls: `obsidian-memos-mobile-library__item${!this.showTrash && notebook.id === activeId ? " is-active" : ""}`,
         attr: { type: "button" },
       });
@@ -314,8 +316,37 @@ export class MemosView extends ItemView {
       setIcon(icon, notebook.private ? "lock" : "notebook-tabs");
       button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
       this.registerDomEvent(button, "click", () => void this.selectNotebook(notebook));
+      const expandButton = row.createEl("button", {
+        cls: "clickable-icon obsidian-memos-mobile-library__expand",
+        attr: { type: "button", "aria-label": "展开备忘录内容", title: "展开备忘录内容" },
+      });
+      const expanded = this.expandedNotebookId === notebook.id && !this.showTrash;
+      setIcon(expandButton, expanded ? "chevron-down" : "chevron-right");
+      this.registerDomEvent(expandButton, "click", (event: MouseEvent) => {
+        event.stopPropagation();
+        this.expandedNotebookId = expanded ? "" : notebook.id;
+        this.renderMobileLibrary();
+      });
+      if (expanded) this.renderNotebookContents(row, notebook.id);
     }
     this.mobileTrashButton?.toggleClass("is-active", this.showTrash);
+  }
+
+  private renderNotebookContents(container: HTMLElement, notebookId: string): void {
+    const contents = container.createDiv({ cls: "obsidian-memos-mobile-library__contents" });
+    const memos = this.allMemos.filter((memo) => memo.notebookId === notebookId && !memo.trashedAt);
+    if (memos.length === 0) {
+      contents.createDiv({ cls: "obsidian-memos-mobile-library__contents-empty", text: "暂无内容" });
+      return;
+    }
+    for (const memo of memos.slice(0, 30)) {
+      const button = contents.createEl("button", { text: getMemoListTitle(memo.content), attr: { type: "button" } });
+      this.registerDomEvent(button, "click", () => {
+        this.showTrash = false;
+        this.mobileDetail = true;
+        this.selectMemo(memo);
+      });
+    }
   }
 
   private async createNotebook(): Promise<void> {

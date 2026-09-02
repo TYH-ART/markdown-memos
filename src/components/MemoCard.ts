@@ -269,6 +269,15 @@ export class MemoCard {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
+    // Keep mobile attachments available while editing so images/files can still
+    // be opened without leaving the editor. Desktop keeps its existing editor
+    // layout unchanged.
+    if (this.options.isMobileLayout?.()) {
+      new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+        this.display,
+        this.memo.attachments,
+      );
+    }
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     this.resizeMobileBodyEditor(textarea);
