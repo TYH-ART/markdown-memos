@@ -1061,6 +1061,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   height: var(--header-height, 50px);
   gap: 8px;
   padding-bottom: 0;
+  border-bottom: 0;
   overflow: visible;
 }
 
@@ -1324,13 +1325,19 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   overflow-y: auto;
   overscroll-behavior: contain;
   padding-bottom: max(36px, env(safe-area-inset-bottom));
+  scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
 }
 
+.is-mobile .obsidian-memos-detail-card-host::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
 .is-mobile .obsidian-memos-feed-item > .obsidian-memos-card {
-  border-right: 0;
-  border-left: 0;
-  border-radius: 0;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: var(--radius-l);
 }
 
 .is-mobile .obsidian-memos-feed-item > .obsidian-memos-card.is-titleless {
