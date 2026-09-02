@@ -108,6 +108,12 @@ export class MemosView extends ItemView {
     });
     setIcon(sidebarButton, "sidebar");
     this.registerDomEvent(sidebarButton, "click", () => void this.toggleListPane());
+    const mobileRefreshButton = toolbar.createEl("button", {
+      cls: "clickable-icon obsidian-memos-toolbar__mobile-refresh",
+      attr: { type: "button", "aria-label": "刷新 Memo", title: "刷新 Memo" },
+    });
+    setIcon(mobileRefreshButton, "refresh-cw");
+    this.registerDomEvent(mobileRefreshButton, "click", () => void this.refresh());
 
     const title = toolbar.createDiv({ cls: "obsidian-memos-toolbar__title" });
     title.createEl("strong", { text: "Markdown Memos" });

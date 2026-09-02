@@ -2010,6 +2010,12 @@ var MemosView = class extends import_obsidian11.ItemView {
     });
     (0, import_obsidian11.setIcon)(sidebarButton, "sidebar");
     this.registerDomEvent(sidebarButton, "click", () => void this.toggleListPane());
+    const mobileRefreshButton = toolbar.createEl("button", {
+      cls: "clickable-icon obsidian-memos-toolbar__mobile-refresh",
+      attr: { type: "button", "aria-label": "\u5237\u65B0 Memo", title: "\u5237\u65B0 Memo" }
+    });
+    (0, import_obsidian11.setIcon)(mobileRefreshButton, "refresh-cw");
+    this.registerDomEvent(mobileRefreshButton, "click", () => void this.refresh());
     const title = toolbar.createDiv({ cls: "obsidian-memos-toolbar__title" });
     title.createEl("strong", { text: "Markdown Memos" });
     this.folderLabel = title.createSpan({ cls: "obsidian-memos-toolbar__folder", text: this.plugin.repository.folder });
