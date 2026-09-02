@@ -988,8 +988,10 @@ var MemoCard = class {
     this.memo = memo;
     this.options = options;
     this.editSaveQueue = Promise.resolve();
+    this.finishingEdit = false;
+    const isTitleless = !splitMemoContent(memo.content).title.trim();
     this.article = container.createEl("article", {
-      cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}`
+      cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}${isTitleless ? " is-titleless" : ""}`
     });
     const header = this.article.createDiv({ cls: "obsidian-memos-card__header" });
     const metadata = header.createDiv({ cls: "obsidian-memos-card__metadata" });
@@ -1043,10 +1045,18 @@ var MemoCard = class {
       this.openMenu(event);
     });
     owner.registerDomEvent(this.article, "click", (event) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("a, button, input, textarea, select")) return;
+      var _a, _b, _c, _d;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target == null ? void 0 : target.closest("a, button, select")) return;
       if (event.detail === 2) {
-        void this.startEditing();
+        event.preventDefault();
+        if (this.article.hasClass("is-editing")) {
+          const title = (_b = (_a = this.editorTitleInput) == null ? void 0 : _a.value) != null ? _b : "";
+          const body = (_d = (_c = this.editorTextarea) == null ? void 0 : _c.value) != null ? _d : "";
+          void this.finishEditing(joinMemoContent(title, body));
+        } else {
+          void this.startEditing();
+        }
       } else if (event.detail >= 3) {
         event.preventDefault();
         this.expand();
@@ -1238,11 +1248,16 @@ var MemoCard = class {
   }
   async finishEditing(content) {
     var _a, _b;
-    if (!this.article.hasClass("is-editing")) return;
-    this.editDraft = content;
-    await this.flushAutoSave();
-    (_b = (_a = this.options).onEditingChange) == null ? void 0 : _b.call(_a, false);
-    await this.options.onChanged();
+    if (!this.article.hasClass("is-editing") || this.finishingEdit) return;
+    this.finishingEdit = true;
+    try {
+      this.editDraft = content;
+      await this.flushAutoSave();
+      (_b = (_a = this.options).onEditingChange) == null ? void 0 : _b.call(_a, false);
+      await this.options.onChanged();
+    } finally {
+      this.finishingEdit = false;
+    }
   }
   renderDetectedLinks(container, content) {
     const urls = extractExternalUrls(content);
@@ -1678,30 +1693,34 @@ var MemoList = class {
     this.suppressClick = false;
     this.listEl = container.createDiv({ cls: "obsidian-memos-list-pane__items" });
     owner.registerDomEvent(this.listEl, "click", (event) => {
+      var _a, _b, _c;
       if (this.suppressClick) {
         event.preventDefault();
         return;
       }
-      const target = event.target instanceof HTMLElement ? event.target.closest("[data-memo-path]") : null;
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      const target = (_a = eventTarget == null ? void 0 : eventTarget.closest("[data-memo-path]")) != null ? _a : null;
       const path = target == null ? void 0 : target.dataset.memoPath;
       if (!path) {
         return;
       }
       const memo = this.memos.find((item) => item.file.path === path);
       if (memo) {
-        const deleteButton = event.target instanceof HTMLElement ? event.target.closest("[data-swipe-delete]") : null;
+        const deleteButton = (_b = eventTarget == null ? void 0 : eventTarget.closest("[data-swipe-delete]")) != null ? _b : null;
         if (deleteButton) {
           event.preventDefault();
           event.stopPropagation();
-          this.closeSwipeRows();
-          this.callbacks.onDelete(memo);
+          deleteButton.addClass("is-activated");
+          void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
+            if (deleteButton.isConnected) deleteButton.removeClass("is-activated");
+          });
           return;
         }
         if (target.hasClass("is-swipe-open")) {
           this.closeSwipeRows();
           return;
         }
-        const taskToggle = event.target instanceof HTMLElement ? event.target.closest("[data-task-toggle]") : null;
+        const taskToggle = (_c = eventTarget == null ? void 0 : eventTarget.closest("[data-task-toggle]")) != null ? _c : null;
         if (taskToggle) {
           this.callbacks.onToggleTask(memo);
         } else {
@@ -1711,7 +1730,7 @@ var MemoList = class {
       }
     });
     owner.registerDomEvent(this.listEl, "contextmenu", (event) => {
-      const target = event.target instanceof HTMLElement ? event.target.closest("[data-memo-path]") : null;
+      const target = event.target instanceof Element ? event.target.closest("[data-memo-path]") : null;
       const path = target == null ? void 0 : target.dataset.memoPath;
       const memo = path ? this.memos.find((item) => item.file.path === path) : void 0;
       if (!memo) return;
@@ -1735,7 +1754,7 @@ var MemoList = class {
   }
   startSwipe(event) {
     if (!event.isPrimary || event.button !== 0 || !this.listEl.closest(".is-mobile")) return;
-    if (!(event.target instanceof HTMLElement) || event.target.closest("button")) return;
+    if (!(event.target instanceof Element) || event.target.closest("button")) return;
     const row = event.target.closest(".obsidian-memos-list-row");
     const item = row == null ? void 0 : row.querySelector(".obsidian-memos-list-item");
     if (!row || !item) return;
@@ -1969,7 +1988,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     const toolbarActions = toolbar.createDiv({ cls: "obsidian-memos-toolbar__actions" });
     const searchInput = toolbarActions.createEl("input", {
       cls: "obsidian-memos-toolbar__search",
-      attr: { type: "search", placeholder: "\u641C\u7D22 Memos", "aria-label": "\u641C\u7D22 Memos" }
+      attr: { type: "search", placeholder: "\u641C\u7D22", "aria-label": "\u641C\u7D22 Memos" }
     });
     const filterSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "Memo \u7C7B\u578B\u7B5B\u9009" } });
     addSelectOption(filterSelect, "all", "\u5168\u90E8");
@@ -1995,7 +2014,12 @@ var MemosView = class extends import_obsidian11.ItemView {
       void this.plugin.saveSettings();
       void this.applyCurrentFilters();
     });
-    const newButton = toolbarActions.createEl("button", { cls: "mod-cta", text: "+ \u65B0\u5EFA Memo", attr: { type: "button" } });
+    const newButton = toolbarActions.createEl("button", {
+      cls: "mod-cta obsidian-memos-toolbar__new",
+      attr: { type: "button", "aria-label": "\u65B0\u5EFA Memo" }
+    });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ \u65B0\u5EFA Memo" });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+ \u65B0\u5EFA" });
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();
@@ -2034,7 +2058,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.memoList = new MemoList(this, listHost, {
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
-      onDelete: (memo) => void this.deleteMemoFromList(memo),
+      onDelete: (memo) => this.deleteMemoFromList(memo, true),
       onContextMenu: (memo, event) => this.openListContextMenu(memo, event)
     });
     const mobileScrim = this.splitEl.createDiv({ cls: "obsidian-memos-mobile-scrim" });
@@ -2064,8 +2088,16 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-card-host" });
     this.registerDomEvent(this.contentEl, "keydown", (event) => this.handleKeyboard(event));
     this.registerDomEvent(window, "resize", () => this.updateLayoutState());
-    this.registerDomEvent(window, "pointermove", (event) => this.moveDivider(event));
-    this.registerDomEvent(window, "pointerup", () => this.stopDividerDrag());
+    this.registerDomEvent(this.splitEl, "pointerdown", (event) => this.startMobileDrawerSwipe(event));
+    this.registerDomEvent(window, "pointermove", (event) => {
+      this.moveDivider(event);
+      this.moveMobileDrawerSwipe(event);
+    });
+    this.registerDomEvent(window, "pointerup", (event) => {
+      this.stopDividerDrag();
+      this.finishMobileDrawerSwipe(event);
+    });
+    this.registerDomEvent(window, "pointercancel", (event) => this.cancelMobileDrawerSwipe(event));
     this.updateLayoutState();
   }
   async renderDetail(sequence) {
@@ -2217,10 +2249,13 @@ var MemosView = class extends import_obsidian11.ItemView {
       new import_obsidian11.Notice("\u66F4\u65B0\u7F6E\u9876\u5931\u8D25");
     }
   }
-  async deleteMemoFromList(memo) {
+  async deleteMemoFromList(memo, keepMobileListOpen = false) {
     if (!await confirmMemoDeletion(this.app, memo)) return;
     try {
       await this.plugin.repository.deleteMemo(memo.file);
+      if (keepMobileListOpen && this.isMobileLayout()) {
+        this.mobileDetail = false;
+      }
       await this.refresh();
     } catch (error) {
       console.error("[Markdown Memos] \u5220\u9664\u5931\u8D25\u3002", error);
@@ -2335,6 +2370,66 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.isDraggingDivider = false;
     this.contentEl.removeClass("is-dragging-divider");
     void this.plugin.saveSettings();
+  }
+  startMobileDrawerSwipe(event) {
+    if (!this.isMobileLayout() || !this.mobileDetail || !event.isPrimary || event.button !== 0 || !this.splitEl) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target == null ? void 0 : target.closest("button, input, textarea, select, a")) return;
+    this.mobileDrawerGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offset: 0,
+      active: false
+    };
+  }
+  moveMobileDrawerSwipe(event) {
+    var _a, _b;
+    const gesture = this.mobileDrawerGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId || !this.splitEl) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.active) {
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 6) return;
+      if (deltaX <= 0 || Math.abs(deltaY) >= Math.abs(deltaX)) {
+        this.resetMobileDrawerSwipe();
+        return;
+      }
+      gesture.active = true;
+      this.contentEl.addClass("is-mobile-drawer-dragging");
+      this.splitEl.setPointerCapture(event.pointerId);
+    }
+    event.preventDefault();
+    const drawerWidth = (_b = (_a = this.splitEl.querySelector(".obsidian-memos-list-pane")) == null ? void 0 : _a.clientWidth) != null ? _b : 1;
+    gesture.offset = Math.min(drawerWidth, Math.max(0, deltaX));
+    this.contentEl.style.setProperty("--memos-mobile-drawer-offset", `${gesture.offset}px`);
+    this.contentEl.style.setProperty("--memos-mobile-drawer-progress", String(gesture.offset / drawerWidth));
+  }
+  finishMobileDrawerSwipe(event) {
+    var _a, _b;
+    const gesture = this.mobileDrawerGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId || !this.splitEl) return;
+    const drawerWidth = (_b = (_a = this.splitEl.querySelector(".obsidian-memos-list-pane")) == null ? void 0 : _a.clientWidth) != null ? _b : 1;
+    if (gesture.active && gesture.offset >= Math.min(96, drawerWidth * 0.35)) {
+      this.mobileDetail = false;
+      this.updateLayoutState();
+    }
+    this.resetMobileDrawerSwipe(event.pointerId);
+  }
+  cancelMobileDrawerSwipe(event) {
+    var _a;
+    if (((_a = this.mobileDrawerGesture) == null ? void 0 : _a.pointerId) !== event.pointerId) return;
+    this.resetMobileDrawerSwipe(event.pointerId);
+  }
+  resetMobileDrawerSwipe(pointerId) {
+    var _a;
+    this.mobileDrawerGesture = void 0;
+    this.contentEl.removeClass("is-mobile-drawer-dragging");
+    this.contentEl.style.removeProperty("--memos-mobile-drawer-offset");
+    this.contentEl.style.removeProperty("--memos-mobile-drawer-progress");
+    if (pointerId !== void 0 && ((_a = this.splitEl) == null ? void 0 : _a.hasPointerCapture(pointerId))) {
+      this.splitEl.releasePointerCapture(pointerId);
+    }
   }
 };
 function addSelectOption(select, value, label) {

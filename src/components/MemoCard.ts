@@ -26,6 +26,7 @@ export class MemoCard {
   private editorTextarea?: HTMLTextAreaElement;
   private editorTagTarget?: HTMLInputElement | HTMLTextAreaElement;
   private lastPersistedContent?: string;
+  private finishingEdit = false;
 
   public constructor(
     private readonly app: App,
@@ -35,8 +36,9 @@ export class MemoCard {
     private readonly memo: MemoRecord,
     private readonly options: MemoCardOptions,
   ) {
+    const isTitleless = !splitMemoContent(memo.content).title.trim();
     this.article = container.createEl("article", {
-      cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}`,
+      cls: `obsidian-memos-card${memo.type === "task" ? " is-task" : ""}${memo.completed ? " is-completed" : ""}${isTitleless ? " is-titleless" : ""}`,
     });
     const header = this.article.createDiv({ cls: "obsidian-memos-card__header" });
     const metadata = header.createDiv({ cls: "obsidian-memos-card__metadata" });
@@ -87,11 +89,17 @@ export class MemoCard {
       this.openMenu(event);
     });
     owner.registerDomEvent(this.article, "click", (event: MouseEvent) => {
-      const target = event.target;
-      if (target instanceof HTMLElement && target.closest("a, button, input, textarea, select")) return;
+      const target = event.target instanceof Element ? event.target : null;
+      if (target?.closest("a, button, select")) return;
       if (event.detail === 2) {
-        // Start immediately on the second click; waiting for a timeout made editing feel laggy.
-        void this.startEditing();
+        event.preventDefault();
+        if (this.article.hasClass("is-editing")) {
+          const title = this.editorTitleInput?.value ?? "";
+          const body = this.editorTextarea?.value ?? "";
+          void this.finishEditing(joinMemoContent(title, body));
+        } else {
+          void this.startEditing();
+        }
       } else if (event.detail >= 3) {
         event.preventDefault();
         this.expand();
@@ -292,11 +300,16 @@ export class MemoCard {
   }
 
   private async finishEditing(content: string): Promise<void> {
-    if (!this.article.hasClass("is-editing")) return;
-    this.editDraft = content;
-    await this.flushAutoSave();
-    this.options.onEditingChange?.(false);
-    await this.options.onChanged();
+    if (!this.article.hasClass("is-editing") || this.finishingEdit) return;
+    this.finishingEdit = true;
+    try {
+      this.editDraft = content;
+      await this.flushAutoSave();
+      this.options.onEditingChange?.(false);
+      await this.options.onChanged();
+    } finally {
+      this.finishingEdit = false;
+    }
   }
 
   private renderDetectedLinks(container: HTMLElement, content: string): void {

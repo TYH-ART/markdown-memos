@@ -13,6 +13,14 @@ const MIN_LIST_WIDTH = 240;
 const MAX_LIST_WIDTH = 420;
 type MemoSort = "modified-desc" | "modified-asc" | "name-asc" | "name-desc" | "tags-desc" | "tags-asc";
 
+interface MobileDrawerGesture {
+  pointerId: number;
+  startX: number;
+  startY: number;
+  offset: number;
+  active: boolean;
+}
+
 export class MemosView extends ItemView {
   private memoList?: MemoList;
   private detailCards: MemoCard[] = [];
@@ -31,6 +39,7 @@ export class MemosView extends ItemView {
   private refreshSequence = 0;
   private isDraggingDivider = false;
   private editingPath?: string;
+  private mobileDrawerGesture?: MobileDrawerGesture;
 
   public constructor(
     leaf: WorkspaceLeaf,
@@ -105,7 +114,7 @@ export class MemosView extends ItemView {
     const toolbarActions = toolbar.createDiv({ cls: "obsidian-memos-toolbar__actions" });
     const searchInput = toolbarActions.createEl("input", {
       cls: "obsidian-memos-toolbar__search",
-      attr: { type: "search", placeholder: "搜索 Memos", "aria-label": "搜索 Memos" },
+      attr: { type: "search", placeholder: "搜索", "aria-label": "搜索 Memos" },
     });
     const filterSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "Memo 类型筛选" } });
     addSelectOption(filterSelect, "all", "全部");
@@ -130,7 +139,12 @@ export class MemosView extends ItemView {
       void this.plugin.saveSettings();
       void this.applyCurrentFilters();
     });
-    const newButton = toolbarActions.createEl("button", { cls: "mod-cta", text: "+ 新建 Memo", attr: { type: "button" } });
+    const newButton = toolbarActions.createEl("button", {
+      cls: "mod-cta obsidian-memos-toolbar__new",
+      attr: { type: "button", "aria-label": "新建 Memo" },
+    });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ 新建 Memo" });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+ 新建" });
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();
@@ -169,7 +183,7 @@ export class MemosView extends ItemView {
     this.memoList = new MemoList(this, listHost, {
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
-      onDelete: (memo) => void this.deleteMemoFromList(memo),
+      onDelete: (memo) => this.deleteMemoFromList(memo, true),
       onContextMenu: (memo, event) => this.openListContextMenu(memo, event),
     });
 
@@ -203,8 +217,16 @@ export class MemosView extends ItemView {
 
     this.registerDomEvent(this.contentEl, "keydown", (event: KeyboardEvent) => this.handleKeyboard(event));
     this.registerDomEvent(window, "resize", () => this.updateLayoutState());
-    this.registerDomEvent(window, "pointermove", (event: PointerEvent) => this.moveDivider(event));
-    this.registerDomEvent(window, "pointerup", () => this.stopDividerDrag());
+    this.registerDomEvent(this.splitEl, "pointerdown", (event: PointerEvent) => this.startMobileDrawerSwipe(event));
+    this.registerDomEvent(window, "pointermove", (event: PointerEvent) => {
+      this.moveDivider(event);
+      this.moveMobileDrawerSwipe(event);
+    });
+    this.registerDomEvent(window, "pointerup", (event: PointerEvent) => {
+      this.stopDividerDrag();
+      this.finishMobileDrawerSwipe(event);
+    });
+    this.registerDomEvent(window, "pointercancel", (event: PointerEvent) => this.cancelMobileDrawerSwipe(event));
     this.updateLayoutState();
   }
 
@@ -364,10 +386,13 @@ export class MemosView extends ItemView {
     }
   }
 
-  private async deleteMemoFromList(memo: MemoRecord): Promise<void> {
+  private async deleteMemoFromList(memo: MemoRecord, keepMobileListOpen = false): Promise<void> {
     if (!(await confirmMemoDeletion(this.app, memo))) return;
     try {
       await this.plugin.repository.deleteMemo(memo.file);
+      if (keepMobileListOpen && this.isMobileLayout()) {
+        this.mobileDetail = false;
+      }
       await this.refresh();
     } catch (error) {
       console.error("[Markdown Memos] 删除失败。", error);
@@ -492,6 +517,68 @@ export class MemosView extends ItemView {
     this.isDraggingDivider = false;
     this.contentEl.removeClass("is-dragging-divider");
     void this.plugin.saveSettings();
+  }
+
+  private startMobileDrawerSwipe(event: PointerEvent): void {
+    if (!this.isMobileLayout() || !this.mobileDetail || !event.isPrimary || event.button !== 0 || !this.splitEl) return;
+    const target = event.target instanceof Element ? event.target : null;
+    if (target?.closest("button, input, textarea, select, a")) return;
+    this.mobileDrawerGesture = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      offset: 0,
+      active: false,
+    };
+  }
+
+  private moveMobileDrawerSwipe(event: PointerEvent): void {
+    const gesture = this.mobileDrawerGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId || !this.splitEl) return;
+    const deltaX = event.clientX - gesture.startX;
+    const deltaY = event.clientY - gesture.startY;
+    if (!gesture.active) {
+      if (Math.max(Math.abs(deltaX), Math.abs(deltaY)) < 6) return;
+      if (deltaX <= 0 || Math.abs(deltaY) >= Math.abs(deltaX)) {
+        this.resetMobileDrawerSwipe();
+        return;
+      }
+      gesture.active = true;
+      this.contentEl.addClass("is-mobile-drawer-dragging");
+      this.splitEl.setPointerCapture(event.pointerId);
+    }
+
+    event.preventDefault();
+    const drawerWidth = this.splitEl.querySelector<HTMLElement>(".obsidian-memos-list-pane")?.clientWidth ?? 1;
+    gesture.offset = Math.min(drawerWidth, Math.max(0, deltaX));
+    this.contentEl.style.setProperty("--memos-mobile-drawer-offset", `${gesture.offset}px`);
+    this.contentEl.style.setProperty("--memos-mobile-drawer-progress", String(gesture.offset / drawerWidth));
+  }
+
+  private finishMobileDrawerSwipe(event: PointerEvent): void {
+    const gesture = this.mobileDrawerGesture;
+    if (!gesture || event.pointerId !== gesture.pointerId || !this.splitEl) return;
+    const drawerWidth = this.splitEl.querySelector<HTMLElement>(".obsidian-memos-list-pane")?.clientWidth ?? 1;
+    if (gesture.active && gesture.offset >= Math.min(96, drawerWidth * 0.35)) {
+      this.mobileDetail = false;
+      this.updateLayoutState();
+    }
+    this.resetMobileDrawerSwipe(event.pointerId);
+  }
+
+  private cancelMobileDrawerSwipe(event: PointerEvent): void {
+    if (this.mobileDrawerGesture?.pointerId !== event.pointerId) return;
+    this.resetMobileDrawerSwipe(event.pointerId);
+  }
+
+  private resetMobileDrawerSwipe(pointerId?: number): void {
+    this.mobileDrawerGesture = undefined;
+    this.contentEl.removeClass("is-mobile-drawer-dragging");
+    this.contentEl.style.removeProperty("--memos-mobile-drawer-offset");
+    this.contentEl.style.removeProperty("--memos-mobile-drawer-progress");
+    if (pointerId !== undefined && this.splitEl?.hasPointerCapture(pointerId)) {
+      this.splitEl.releasePointerCapture(pointerId);
+    }
   }
 }
 

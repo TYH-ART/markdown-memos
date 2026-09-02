@@ -9,7 +9,7 @@ const SWIPE_OPEN_THRESHOLD = SWIPE_DELETE_WIDTH / 2;
 export interface MemoListPaneCallbacks {
   onSelect: (memo: MemoRecord) => void;
   onToggleTask: (memo: MemoRecord) => void;
-  onDelete: (memo: MemoRecord) => void;
+  onDelete: (memo: MemoRecord) => void | Promise<void>;
   onContextMenu: (memo: MemoRecord, event: MouseEvent) => void;
 }
 
@@ -43,26 +43,29 @@ export class MemoList {
         event.preventDefault();
         return;
       }
-      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-memo-path]") : null;
+      const eventTarget = event.target instanceof Element ? event.target : null;
+      const target = eventTarget?.closest<HTMLElement>("[data-memo-path]") ?? null;
       const path = target?.dataset.memoPath;
       if (!path) {
         return;
       }
       const memo = this.memos.find((item) => item.file.path === path);
       if (memo) {
-        const deleteButton = event.target instanceof HTMLElement ? event.target.closest("[data-swipe-delete]") : null;
+        const deleteButton = eventTarget?.closest<HTMLElement>("[data-swipe-delete]") ?? null;
         if (deleteButton) {
           event.preventDefault();
           event.stopPropagation();
-          this.closeSwipeRows();
-          this.callbacks.onDelete(memo);
+          deleteButton.addClass("is-activated");
+          void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
+            if (deleteButton.isConnected) deleteButton.removeClass("is-activated");
+          });
           return;
         }
         if (target.hasClass("is-swipe-open")) {
           this.closeSwipeRows();
           return;
         }
-        const taskToggle = event.target instanceof HTMLElement ? event.target.closest("[data-task-toggle]") : null;
+        const taskToggle = eventTarget?.closest("[data-task-toggle]") ?? null;
         if (taskToggle) {
           this.callbacks.onToggleTask(memo);
         } else {
@@ -72,7 +75,7 @@ export class MemoList {
       }
     });
     owner.registerDomEvent(this.listEl, "contextmenu", (event: MouseEvent) => {
-      const target = event.target instanceof HTMLElement ? event.target.closest<HTMLElement>("[data-memo-path]") : null;
+      const target = event.target instanceof Element ? event.target.closest<HTMLElement>("[data-memo-path]") : null;
       const path = target?.dataset.memoPath;
       const memo = path ? this.memos.find((item) => item.file.path === path) : undefined;
       if (!memo) return;
@@ -99,7 +102,7 @@ export class MemoList {
 
   private startSwipe(event: PointerEvent): void {
     if (!event.isPrimary || event.button !== 0 || !this.listEl.closest(".is-mobile")) return;
-    if (!(event.target instanceof HTMLElement) || event.target.closest("button")) return;
+    if (!(event.target instanceof Element) || event.target.closest("button")) return;
     const row = event.target.closest<HTMLElement>(".obsidian-memos-list-row");
     const item = row?.querySelector<HTMLElement>(".obsidian-memos-list-item");
     if (!row || !item) return;
