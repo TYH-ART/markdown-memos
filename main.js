@@ -1710,10 +1710,7 @@ var MemoList = class {
         if (deleteButton) {
           event.preventDefault();
           event.stopPropagation();
-          deleteButton.addClass("is-activated");
-          void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
-            if (deleteButton.isConnected) deleteButton.removeClass("is-activated");
-          });
+          this.activateDelete(memo, deleteButton);
           return;
         }
         if (target.hasClass("is-swipe-open")) {
@@ -1820,6 +1817,12 @@ var MemoList = class {
       if (row !== except) row.removeClass("is-swipe-open");
     });
   }
+  activateDelete(memo, button) {
+    button.addClass("is-activated");
+    void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
+      if (button.isConnected) button.removeClass("is-activated");
+    });
+  }
   render() {
     this.listEl.empty();
     if (this.memos.length === 0) {
@@ -1842,6 +1845,12 @@ var MemoList = class {
         attr: { type: "button", "data-swipe-delete": "true", "aria-label": "\u5220\u9664 Memo", title: "\u5220\u9664" }
       });
       (0, import_obsidian10.setIcon)(deleteButton, "trash-2");
+      deleteButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+      deleteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.activateDelete(memo, deleteButton);
+      });
       const item = row.createDiv({
         cls: `obsidian-memos-list-item${memo.file.path === this.selectedPath ? " is-selected" : ""}`,
         attr: { role: "button", tabindex: "0" }
@@ -1986,10 +1995,13 @@ var MemosView = class extends import_obsidian11.ItemView {
     title.createEl("strong", { text: "Markdown Memos" });
     this.folderLabel = title.createSpan({ cls: "obsidian-memos-toolbar__folder", text: this.plugin.repository.folder });
     const toolbarActions = toolbar.createDiv({ cls: "obsidian-memos-toolbar__actions" });
-    const searchInput = toolbarActions.createEl("input", {
+    const searchShell = toolbarActions.createDiv({ cls: "obsidian-memos-toolbar__search-shell" });
+    const searchInput = searchShell.createEl("input", {
       cls: "obsidian-memos-toolbar__search",
-      attr: { type: "search", placeholder: "\u641C\u7D22", "aria-label": "\u641C\u7D22 Memos" }
+      attr: { type: "search", placeholder: " ", "aria-label": "\u641C\u7D22 Memos", autocomplete: "off" }
     });
+    const searchIcon = searchShell.createSpan({ cls: "obsidian-memos-toolbar__search-icon", attr: { "aria-hidden": "true" } });
+    (0, import_obsidian11.setIcon)(searchIcon, "search");
     const filterSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "Memo \u7C7B\u578B\u7B5B\u9009" } });
     addSelectOption(filterSelect, "all", "\u5168\u90E8");
     addSelectOption(filterSelect, "note", "\u666E\u901A Memo");
@@ -1998,9 +2010,16 @@ var MemosView = class extends import_obsidian11.ItemView {
     addSelectOption(filterSelect, "archived", "\u5DF2\u5F52\u6863");
     filterSelect.value = this.plugin.settings.selectedFilter;
     this.tagSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "\u6807\u7B7E\u7B5B\u9009" } });
-    this.registerDomEvent(searchInput, "input", () => {
+    const applySearch = () => {
       this.searchQuery = searchInput.value;
+      searchShell.toggleClass("has-query", Boolean(this.searchQuery));
       void this.applyCurrentFilters();
+    };
+    this.registerDomEvent(searchInput, "input", applySearch);
+    searchInput.addEventListener("search", applySearch);
+    this.registerDomEvent(searchInput, "compositionend", applySearch);
+    this.registerDomEvent(searchInput, "focus", () => {
+      window.setTimeout(() => searchInput.setSelectionRange(0, 0), 0);
     });
     this.registerDomEvent(filterSelect, "change", () => {
       const value = filterSelect.value;
@@ -2019,7 +2038,7 @@ var MemosView = class extends import_obsidian11.ItemView {
       attr: { type: "button", "aria-label": "\u65B0\u5EFA Memo" }
     });
     newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ \u65B0\u5EFA Memo" });
-    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+ \u65B0\u5EFA" });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+" });
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();

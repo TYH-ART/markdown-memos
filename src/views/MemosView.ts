@@ -112,10 +112,13 @@ export class MemosView extends ItemView {
     this.folderLabel = title.createSpan({ cls: "obsidian-memos-toolbar__folder", text: this.plugin.repository.folder });
 
     const toolbarActions = toolbar.createDiv({ cls: "obsidian-memos-toolbar__actions" });
-    const searchInput = toolbarActions.createEl("input", {
+    const searchShell = toolbarActions.createDiv({ cls: "obsidian-memos-toolbar__search-shell" });
+    const searchInput = searchShell.createEl("input", {
       cls: "obsidian-memos-toolbar__search",
-      attr: { type: "search", placeholder: "搜索", "aria-label": "搜索 Memos" },
+      attr: { type: "search", placeholder: " ", "aria-label": "搜索 Memos", autocomplete: "off" },
     });
+    const searchIcon = searchShell.createSpan({ cls: "obsidian-memos-toolbar__search-icon", attr: { "aria-hidden": "true" } });
+    setIcon(searchIcon, "search");
     const filterSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "Memo 类型筛选" } });
     addSelectOption(filterSelect, "all", "全部");
     addSelectOption(filterSelect, "note", "普通 Memo");
@@ -124,9 +127,16 @@ export class MemosView extends ItemView {
     addSelectOption(filterSelect, "archived", "已归档");
     filterSelect.value = this.plugin.settings.selectedFilter;
     this.tagSelect = toolbarActions.createEl("select", { cls: "dropdown obsidian-memos-toolbar__select", attr: { "aria-label": "标签筛选" } });
-    this.registerDomEvent(searchInput, "input", () => {
+    const applySearch = (): void => {
       this.searchQuery = searchInput.value;
+      searchShell.toggleClass("has-query", Boolean(this.searchQuery));
       void this.applyCurrentFilters();
+    };
+    this.registerDomEvent(searchInput, "input", applySearch);
+    searchInput.addEventListener("search", applySearch);
+    this.registerDomEvent(searchInput, "compositionend", applySearch);
+    this.registerDomEvent(searchInput, "focus", () => {
+      window.setTimeout(() => searchInput.setSelectionRange(0, 0), 0);
     });
     this.registerDomEvent(filterSelect, "change", () => {
       const value = filterSelect.value;
@@ -144,7 +154,7 @@ export class MemosView extends ItemView {
       attr: { type: "button", "aria-label": "新建 Memo" },
     });
     newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-full", text: "+ 新建 Memo" });
-    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+ 新建" });
+    newButton.createSpan({ cls: "obsidian-memos-toolbar__new-label is-compact", text: "+" });
     this.registerDomEvent(newButton, "click", () => {
       this.mobileDetail = true;
       this.updateLayoutState();

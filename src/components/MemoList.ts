@@ -55,10 +55,7 @@ export class MemoList {
         if (deleteButton) {
           event.preventDefault();
           event.stopPropagation();
-          deleteButton.addClass("is-activated");
-          void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
-            if (deleteButton.isConnected) deleteButton.removeClass("is-activated");
-          });
+          this.activateDelete(memo, deleteButton);
           return;
         }
         if (target.hasClass("is-swipe-open")) {
@@ -175,6 +172,13 @@ export class MemoList {
     });
   }
 
+  private activateDelete(memo: MemoRecord, button: HTMLElement): void {
+    button.addClass("is-activated");
+    void Promise.resolve(this.callbacks.onDelete(memo)).finally(() => {
+      if (button.isConnected) button.removeClass("is-activated");
+    });
+  }
+
   private render(): void {
     this.listEl.empty();
     if (this.memos.length === 0) {
@@ -198,6 +202,12 @@ export class MemoList {
         attr: { type: "button", "data-swipe-delete": "true", "aria-label": "删除 Memo", title: "删除" },
       });
       setIcon(deleteButton, "trash-2");
+      deleteButton.addEventListener("pointerdown", (event) => event.stopPropagation());
+      deleteButton.addEventListener("click", (event) => {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.activateDelete(memo, deleteButton);
+      });
       const item = row.createDiv({
         cls: `obsidian-memos-list-item${memo.file.path === this.selectedPath ? " is-selected" : ""}`,
         attr: { role: "button", tabindex: "0" },
