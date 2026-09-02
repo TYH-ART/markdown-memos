@@ -2231,7 +2231,8 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.splitEl = page.createDiv({ cls: "obsidian-memos-split" });
     const listPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-list-pane" });
     const mobileLibrary = listPaneEl.createDiv({ cls: "obsidian-memos-mobile-library" });
-    const mobileLibraryHeader = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__header" });
+    const mobileLibraryUpper = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__upper" });
+    const mobileLibraryHeader = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__header" });
     mobileLibraryHeader.createEl("strong", { text: "\u5907\u5FD8\u5F55" });
     const addNotebookButton = mobileLibraryHeader.createEl("button", {
       cls: "clickable-icon obsidian-memos-mobile-library__add",
@@ -2239,7 +2240,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     });
     (0, import_obsidian11.setIcon)(addNotebookButton, "plus");
     this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
-    this.mobileNotebookList = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__list" });
+    this.mobileNotebookList = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__list" });
     this.mobileTrashButton = mobileLibrary.createEl("button", {
       cls: "obsidian-memos-mobile-library__trash",
       attr: { type: "button" }
