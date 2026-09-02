@@ -1232,9 +1232,9 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
   position: absolute;
   z-index: 5;
   inset: 0 auto 0 0;
-  width: 66.6667%;
-  min-width: 66.6667%;
-  flex-basis: 66.6667%;
+  width: 50%;
+  min-width: 50%;
+  flex-basis: 50%;
   border-right: 1px solid var(--background-modifier-border);
   background: var(--background-secondary);
   box-shadow: var(--shadow-l);
@@ -1250,11 +1250,12 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
 }
 
 .is-mobile .obsidian-memos-mobile-library {
+  position: relative;
   display: flex;
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 12px 10px max(16px, env(safe-area-inset-bottom));
+  padding: 12px 10px 64px;
 }
 
 .is-mobile .obsidian-memos-mobile-library__header {
@@ -1309,10 +1310,16 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
 }
 
 .is-mobile .obsidian-memos-mobile-library__trash {
+  position: absolute;
+  right: 10px;
+  bottom: 72px;
+  left: 10px;
+  z-index: 2;
   flex: 0 0 auto;
-  margin-top: 10px;
+  margin-top: 0;
   border-top: 1px solid var(--background-modifier-border);
   border-radius: 0;
+  background: var(--background-secondary);
 }
 
 .is-mobile .obsidian-memos-divider {
@@ -1443,6 +1450,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
 
 .is-mobile .obsidian-memos-feed-item {
   position: relative;
+  flex: 0 0 auto;
   overflow: hidden;
 }
 
