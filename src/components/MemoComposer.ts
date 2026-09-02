@@ -14,6 +14,7 @@ type PendingAttachment =
 
 export class MemoComposer {
   private readonly container: HTMLElement;
+  private readonly composerEl: HTMLElement;
   private readonly titleInput: HTMLInputElement;
   private readonly textarea: HTMLTextAreaElement;
   private readonly titleMirror: HTMLElement;
@@ -26,6 +27,7 @@ export class MemoComposer {
   private submitting = false;
   private memoType: MemoType;
   private readonly taskButton: HTMLButtonElement;
+  private readonly isMobileLayout: () => boolean;
 
   public constructor(
     owner: Component,
@@ -36,24 +38,27 @@ export class MemoComposer {
       defaultType?: MemoType;
       attachmentService?: AttachmentService;
       getPopularTags?: () => string[];
+      isMobileLayout?: () => boolean;
     } = {},
   ) {
     this.container = container;
     this.memoType = options.defaultType ?? "note";
     this.attachmentService = options.attachmentService;
+    this.isMobileLayout = options.isMobileLayout ?? (() => false);
     const composer = container.createDiv({ cls: "obsidian-memos-composer" });
+    this.composerEl = composer;
     const titleField = composer.createDiv({ cls: "obsidian-memos-composer__field is-title" });
     this.titleMirror = titleField.createDiv({ cls: "obsidian-memos-composer__mirror" });
     this.titleInput = titleField.createEl("input", {
       cls: "obsidian-memos-composer__title",
-      attr: { type: "text", placeholder: "", "aria-label": "Memo 标题" },
+      attr: { type: "text", placeholder: this.isMobileLayout() ? "标题" : "", "aria-label": "Memo 标题" },
     });
     const bodyField = composer.createDiv({ cls: "obsidian-memos-composer__field is-body" });
     this.bodyMirror = bodyField.createDiv({ cls: "obsidian-memos-composer__mirror" });
     this.textarea = bodyField.createEl("textarea", {
       cls: "obsidian-memos-composer__input",
       attr: {
-        placeholder: "",
+        placeholder: this.isMobileLayout() ? "你现在在想什么？" : "",
         rows: "5",
         "aria-label": "Memo 内容",
       },
@@ -93,8 +98,14 @@ export class MemoComposer {
       this.renderMirrors();
       this.updateButtonState();
     });
-    owner.registerDomEvent(this.titleInput, "focus", () => { this.tagTarget = this.titleInput; });
-    owner.registerDomEvent(this.textarea, "focus", () => { this.tagTarget = this.textarea; });
+    owner.registerDomEvent(this.titleInput, "focus", () => {
+      this.tagTarget = this.titleInput;
+      this.expandMobileComposer();
+    });
+    owner.registerDomEvent(this.textarea, "focus", () => {
+      this.tagTarget = this.textarea;
+      this.expandMobileComposer();
+    });
     owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event));
     owner.registerDomEvent(this.textarea, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
@@ -138,6 +149,11 @@ export class MemoComposer {
   }
 
   public focus(): void {
+    if (this.isMobileLayout()) {
+      this.expandMobileComposer();
+      this.textarea.focus();
+      return;
+    }
     this.titleInput.focus();
   }
 
@@ -159,7 +175,13 @@ export class MemoComposer {
       this.renderMirrors();
       this.updateButtonState();
       await this.onCreated(memo);
-      this.titleInput.focus();
+      if (this.isMobileLayout()) {
+        this.composerEl.removeClass("is-mobile-expanded");
+        const activeElement = this.container.ownerDocument.activeElement;
+        if (activeElement instanceof HTMLElement && this.container.contains(activeElement)) activeElement.blur();
+      } else {
+        this.titleInput.focus();
+      }
     } catch (error) {
       console.error("[Markdown Memos] 创建 Memo 失败。", error);
       new Notice(`创建 Memo 失败：${errorMessage(error)}`);
@@ -178,6 +200,10 @@ export class MemoComposer {
 
   private updateButtonState(): void {
     this.submitButton.disabled = this.submitting || (!this.titleInput.value.trim() && !this.textarea.value.trim());
+  }
+
+  private expandMobileComposer(): void {
+    if (this.isMobileLayout()) this.composerEl.addClass("is-mobile-expanded");
   }
 
   private updateTaskButton(): void {

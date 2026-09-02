@@ -33,6 +33,7 @@ export class MemosView extends ItemView {
   private memos: MemoRecord[] = [];
   private searchQuery = "";
   private tagSelect?: HTMLSelectElement;
+  private mobileTagButton?: HTMLButtonElement;
   private sortSelect?: HTMLSelectElement;
   private sortOption: MemoSort = "modified-desc";
   private mobileDetail = false;
@@ -73,6 +74,7 @@ export class MemosView extends ItemView {
     this.memoList?.destroy();
     this.memoList = undefined;
     this.folderLabel = undefined;
+    this.mobileTagButton = undefined;
     this.contentEl.empty();
   }
 
@@ -113,6 +115,12 @@ export class MemosView extends ItemView {
 
     const toolbarActions = toolbar.createDiv({ cls: "obsidian-memos-toolbar__actions" });
     const searchShell = toolbarActions.createDiv({ cls: "obsidian-memos-toolbar__search-shell" });
+    this.mobileTagButton = searchShell.createEl("button", {
+      cls: "clickable-icon obsidian-memos-toolbar__mobile-tag",
+      attr: { type: "button", "aria-label": "按标签筛选", title: "按标签筛选" },
+    });
+    setIcon(this.mobileTagButton, "chevron-down");
+    this.registerDomEvent(this.mobileTagButton, "click", (event: MouseEvent) => this.openMobileTagMenu(event));
     const searchInput = searchShell.createEl("input", {
       cls: "obsidian-memos-toolbar__search",
       attr: { type: "search", placeholder: " ", "aria-label": "搜索 Memos", autocomplete: "off" },
@@ -222,6 +230,7 @@ export class MemosView extends ItemView {
         defaultType: this.plugin.settings.defaultMemoType,
         attachmentService: this.plugin.attachmentService,
         getPopularTags: () => this.getPopularTags(3),
+        isMobileLayout: () => this.isMobileLayout(),
       },
     );
     this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-card-host" });
@@ -335,6 +344,44 @@ export class MemosView extends ItemView {
       this.plugin.settings.selectedTag = null;
       this.tagSelect.value = "";
     }
+    const activeTag = this.plugin.settings.selectedTag;
+    this.mobileTagButton?.toggleClass("has-active-tag", Boolean(activeTag));
+    this.mobileTagButton?.setAttr("aria-label", activeTag ? `当前标签：${activeTag}` : "按标签筛选");
+    this.mobileTagButton?.setAttr("title", activeTag ? `当前标签：${activeTag}` : "按标签筛选");
+  }
+
+  private openMobileTagMenu(event: MouseEvent): void {
+    const menu = new Menu();
+    const selectedTag = this.plugin.settings.selectedTag;
+    menu.addItem((item) => item
+      .setTitle("全部标签")
+      .setIcon("list-filter")
+      .setChecked(!selectedTag)
+      .onClick(() => void this.selectMobileTag(null)));
+
+    const frequency = this.getTagFrequency();
+    const tags = Array.from(frequency.keys()).sort((left, right) => {
+      const countDifference = (frequency.get(right) ?? 0) - (frequency.get(left) ?? 0);
+      return countDifference || left.localeCompare(right);
+    });
+    for (const tag of tags) {
+      menu.addItem((item) => item
+        .setTitle(`${tag} (${frequency.get(tag) ?? 0})`)
+        .setIcon("hash")
+        .setChecked(tag === selectedTag)
+        .onClick(() => void this.selectMobileTag(tag)));
+    }
+    menu.showAtMouseEvent(event);
+  }
+
+  private async selectMobileTag(tag: string | null): Promise<void> {
+    this.plugin.settings.selectedTag = tag;
+    if (this.tagSelect) this.tagSelect.value = tag ?? "";
+    this.mobileTagButton?.toggleClass("has-active-tag", Boolean(tag));
+    this.mobileTagButton?.setAttr("aria-label", tag ? `当前标签：${tag}` : "按标签筛选");
+    this.mobileTagButton?.setAttr("title", tag ? `当前标签：${tag}` : "按标签筛选");
+    await this.plugin.saveSettings();
+    await this.applyCurrentFilters();
   }
 
   private getTagFrequency(): Map<string, number> {
@@ -451,7 +498,10 @@ export class MemosView extends ItemView {
   }
 
   private composerFocus(): void {
-    window.setTimeout(() => this.detailContentEl?.querySelector<HTMLInputElement>(".obsidian-memos-composer__title")?.focus(), 0);
+    window.setTimeout(() => {
+      const selector = this.isMobileLayout() ? ".obsidian-memos-composer__input" : ".obsidian-memos-composer__title";
+      this.detailContentEl?.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)?.focus();
+    }, 0);
   }
 
   private destroyDetailCards(): void {
