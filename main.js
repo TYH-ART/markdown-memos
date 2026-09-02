@@ -788,7 +788,7 @@ var ObsidianMemosSettingTab = class extends import_obsidian4.PluginSettingTab {
 var import_obsidian11 = require("obsidian");
 
 // src/components/MemoCard.ts
-var import_obsidian8 = require("obsidian");
+var import_obsidian7 = require("obsidian");
 
 // src/components/MemoAttachmentList.ts
 var import_obsidian5 = require("obsidian");
@@ -850,61 +850,6 @@ function formatFileSize(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// src/components/MemoDeleteModal.ts
-var import_obsidian6 = require("obsidian");
-var MemoDeleteModal = class extends import_obsidian6.Modal {
-  constructor(app, memo, resolve) {
-    super(app);
-    this.memo = memo;
-    this.resolve = resolve;
-    this.resolved = false;
-  }
-  onOpen() {
-    this.setTitle("\u5220\u9664\u8FD9\u6761 Memo\uFF1F");
-    this.contentEl.createEl("p", { text: `\u201C${previewContent(this.memo.content)}\u201D` });
-    this.contentEl.createEl("p", {
-      cls: "setting-item-description",
-      text: "\u6587\u4EF6\u5C06\u901A\u8FC7 Obsidian \u7684\u56DE\u6536\u7AD9\u8BBE\u7F6E\u5B89\u5168\u5220\u9664\u3002"
-    });
-    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
-    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
-    const confirm = actions.createEl("button", {
-      cls: "mod-warning",
-      text: "\u5220\u9664",
-      attr: { type: "button" }
-    });
-    cancel.addEventListener("click", () => this.finish(false));
-    confirm.addEventListener("click", () => this.finish(true));
-    confirm.focus();
-  }
-  onClose() {
-    this.contentEl.empty();
-    if (!this.resolved) {
-      this.resolved = true;
-      this.resolve(false);
-    }
-  }
-  finish(confirmed) {
-    if (this.resolved) {
-      return;
-    }
-    this.resolved = true;
-    this.resolve(confirmed);
-    this.close();
-  }
-};
-function confirmMemoDeletion(app, memo) {
-  return new Promise((resolve) => new MemoDeleteModal(app, memo, resolve).open());
-}
-function previewContent(content) {
-  const singleLine = content.replace(/\s+/g, " ").trim();
-  if (!singleLine) {
-    return memoFallback;
-  }
-  return singleLine.length > 80 ? `${singleLine.slice(0, 80)}\u2026` : singleLine;
-}
-var memoFallback = "\u7A7A Memo";
-
 // src/components/TagSuggestionControl.ts
 function createTagSuggestionControl(owner, container, options) {
   const wrapper = container.createSpan({ cls: `obsidian-memos-tag-control${options.className ? ` ${options.className}` : ""}` });
@@ -958,7 +903,7 @@ function createTagSuggestionControl(owner, container, options) {
 }
 
 // src/components/TextEditingMenu.ts
-var import_obsidian7 = require("obsidian");
+var import_obsidian6 = require("obsidian");
 function openTextEditingMenu(control, event) {
   var _a, _b;
   event.preventDefault();
@@ -966,7 +911,7 @@ function openTextEditingMenu(control, event) {
   const start = (_a = control.selectionStart) != null ? _a : 0;
   const end = (_b = control.selectionEnd) != null ? _b : start;
   const hasSelection = end > start;
-  const menu = new import_obsidian7.Menu();
+  const menu = new import_obsidian6.Menu();
   menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").setDisabled(!hasSelection).onClick(() => void copySelection(control)));
   menu.addItem((item) => item.setTitle("\u7C98\u8D34").setIcon("clipboard-paste").onClick(() => void pasteSelection(control)));
   menu.addItem((item) => item.setTitle("\u526A\u5207").setIcon("scissors").setDisabled(!hasSelection).onClick(() => void cutSelection(control)));
@@ -980,7 +925,7 @@ async function copySelection(control) {
   try {
     await navigator.clipboard.writeText(control.value.slice(start, end));
   } catch (error) {
-    new import_obsidian7.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
+    new import_obsidian6.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
   }
 }
 async function pasteSelection(control) {
@@ -993,7 +938,7 @@ async function pasteSelection(control) {
     control.dispatchEvent(new Event("input"));
     control.focus();
   } catch (error) {
-    new import_obsidian7.Notice(`\u7C98\u8D34\u5931\u8D25\uFF1A${errorMessage(error)}`);
+    new import_obsidian6.Notice(`\u7C98\u8D34\u5931\u8D25\uFF1A${errorMessage(error)}`);
   }
 }
 async function cutSelection(control) {
@@ -1007,7 +952,7 @@ async function cutSelection(control) {
     control.dispatchEvent(new Event("input"));
     control.focus();
   } catch (error) {
-    new import_obsidian7.Notice(`\u526A\u5207\u5931\u8D25\uFF1A${errorMessage(error)}`);
+    new import_obsidian6.Notice(`\u526A\u5207\u5931\u8D25\uFF1A${errorMessage(error)}`);
   }
 }
 
@@ -1045,7 +990,7 @@ var MemoCard = class {
 \u4FEE\u6539\uFF1A${memo.modified.toLocaleString()}`);
     if (memo.pinned) {
       const pinned = metadata.createSpan({ cls: "obsidian-memos-card__pinned", attr: { "aria-label": "\u5DF2\u7F6E\u9876", title: "\u5DF2\u7F6E\u9876" } });
-      (0, import_obsidian8.setIcon)(pinned, "pin");
+      (0, import_obsidian7.setIcon)(pinned, "pin");
     }
     const actions = header.createDiv({ cls: "obsidian-memos-card__toolbar" });
     const pinButton = createIconButton(actions, "pin", memo.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876");
@@ -1123,7 +1068,7 @@ var MemoCard = class {
     this.unloadMarkdownChild();
   }
   openMenu(event) {
-    const menu = new import_obsidian8.Menu();
+    const menu = new import_obsidian7.Menu();
     menu.addItem((item) => item.setTitle(this.memo.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876").setIcon("pin").onClick(() => void this.togglePinned()));
     menu.addItem((item) => item.setTitle("#").setIcon("hash").onClick(() => void this.addTag("#")));
     menu.addItem((item) => item.setTitle("\u5220\u9664").setIcon("trash-2").onClick(() => void this.deleteMemo()));
@@ -1144,10 +1089,10 @@ var MemoCard = class {
         content.createEl("p", { cls: "obsidian-memos-card__empty-content", text: "\uFF08\u7A7A Memo\uFF09" });
       }
     } else {
-      this.markdownChild = new import_obsidian8.MarkdownRenderChild(content);
+      this.markdownChild = new import_obsidian7.MarkdownRenderChild(content);
       this.owner.addChild(this.markdownChild);
       try {
-        await import_obsidian8.MarkdownRenderer.render(this.app, parts.body, content, this.memo.file.path, this.markdownChild);
+        await import_obsidian7.MarkdownRenderer.render(this.app, parts.body, content, this.memo.file.path, this.markdownChild);
         this.highlightInlineTags(content);
       } catch (error) {
         console.warn(`[Markdown Memos] Markdown \u6E32\u67D3\u5931\u8D25\uFF1A${this.memo.file.path}`, error);
@@ -1162,7 +1107,7 @@ var MemoCard = class {
     );
   }
   async startEditing(tagToInsert) {
-    var _a, _b, _c, _d;
+    var _a, _b;
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
@@ -1231,12 +1176,10 @@ var MemoCard = class {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
-    if ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) {
-      new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
-        this.display,
-        this.memo.attachments
-      );
-    }
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+      this.display,
+      this.memo.attachments
+    );
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     this.resizeMobileBodyEditor(textarea);
@@ -1269,7 +1212,7 @@ var MemoCard = class {
     const link = target == null ? void 0 : target.closest("a");
     const selectedText = (_b = (_a = window.getSelection()) == null ? void 0 : _a.toString().trim()) != null ? _b : "";
     const text = selectedText || (link == null ? void 0 : link.href) || "";
-    const menu = new import_obsidian8.Menu();
+    const menu = new import_obsidian7.Menu();
     menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").onClick(() => void this.copyText(text)));
     menu.addItem((item) => item.setTitle("\u7C98\u8D34").setIcon("clipboard-paste").setDisabled(true));
     menu.addItem((item) => item.setTitle("\u526A\u5207").setIcon("scissors").setDisabled(true));
@@ -1291,7 +1234,7 @@ var MemoCard = class {
       this.lastPersistedContent = draft;
     }).catch((error) => {
       console.error(`[Markdown Memos] \u81EA\u52A8\u4FDD\u5B58\u5931\u8D25\uFF1A${this.memo.file.path}`, error);
-      new import_obsidian8.Notice(`\u81EA\u52A8\u4FDD\u5B58\u5931\u8D25\uFF1A${errorMessage(error)}`);
+      new import_obsidian7.Notice(`\u81EA\u52A8\u4FDD\u5B58\u5931\u8D25\uFF1A${errorMessage(error)}`);
     });
     return this.editSaveQueue;
   }
@@ -1374,41 +1317,24 @@ var MemoCard = class {
       if (attachment.managed && !await this.options.attachmentService.isAttachmentReferenced(attachment.path, this.memo.file.path)) {
         await this.options.attachmentService.deleteManagedAttachment(attachment);
       }
-      new import_obsidian8.Notice(attachment.managed ? "\u9644\u4EF6\u5DF2\u79FB\u5230\u7CFB\u7EDF\u5E9F\u7EB8\u7BD3" : "\u5DF2\u79FB\u9664\u9644\u4EF6\u94FE\u63A5\uFF1B\u539F\u6587\u4EF6\u4FDD\u7559");
+      new import_obsidian7.Notice(attachment.managed ? "\u9644\u4EF6\u5DF2\u79FB\u5230\u7CFB\u7EDF\u5E9F\u7EB8\u7BD3" : "\u5DF2\u79FB\u9664\u9644\u4EF6\u94FE\u63A5\uFF1B\u539F\u6587\u4EF6\u4FDD\u7559");
       await this.options.onChanged();
     } catch (error) {
-      new import_obsidian8.Notice(`\u79FB\u9664\u9644\u4EF6\u5931\u8D25\uFF1A${errorMessage(error)}`);
+      new import_obsidian7.Notice(`\u79FB\u9664\u9644\u4EF6\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
   }
   async copyText(text) {
     try {
       await navigator.clipboard.writeText(text);
-      new import_obsidian8.Notice("\u5DF2\u590D\u5236");
+      new import_obsidian7.Notice("\u5DF2\u590D\u5236");
     } catch (error) {
-      new import_obsidian8.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
+      new import_obsidian7.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
   }
   async deleteMemo() {
-    var _a, _b;
-    if ((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a)) {
-      await this.trashImmediately();
-      return;
-    }
-    if (!await confirmMemoDeletion(this.app, this.memo)) return;
-    try {
-      await this.repository.deleteMemo(this.memo.file);
-      await this.options.onChanged();
-    } catch (error) {
-      console.error(`[Markdown Memos] \u5220\u9664\u5931\u8D25\uFF1A${this.memo.file.path}`, error);
-      new import_obsidian8.Notice(`\u5220\u9664 Memo \u5931\u8D25\uFF1A${errorMessage(error)}`);
-    }
+    await this.trashImmediately();
   }
   async handleDeleteClick() {
-    var _a, _b;
-    if (!((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a))) {
-      await this.deleteMemo();
-      return;
-    }
     if (!this.deleteArmed) {
       this.deleteArmed = true;
       this.deleteButton.addClass("is-delete-armed");
@@ -1423,7 +1349,7 @@ var MemoCard = class {
       await this.options.onChanged();
     } catch (error) {
       console.error(`[Markdown Memos] \u79FB\u5165\u56DE\u6536\u7AD9\u5931\u8D25\uFF1A${this.memo.file.path}`, error);
-      new import_obsidian8.Notice(`\u79FB\u5165\u56DE\u6536\u7AD9\u5931\u8D25\uFF1A${errorMessage(error)}`);
+      new import_obsidian7.Notice(`\u79FB\u5165\u56DE\u6536\u7AD9\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
   }
   async runAction(label, action) {
@@ -1432,7 +1358,7 @@ var MemoCard = class {
       await this.options.onChanged();
     } catch (error) {
       console.error(`[Markdown Memos] ${label}`, error);
-      new import_obsidian8.Notice(`${label}\uFF1A${errorMessage(error)}`);
+      new import_obsidian7.Notice(`${label}\uFF1A${errorMessage(error)}`);
     }
   }
   unloadMarkdownChild() {
@@ -1443,7 +1369,7 @@ var MemoCard = class {
 };
 function createIconButton(container, icon, label) {
   const button = container.createEl("button", { cls: "clickable-icon", attr: { type: "button", "aria-label": label, title: label } });
-  (0, import_obsidian8.setIcon)(button, icon);
+  (0, import_obsidian7.setIcon)(button, icon);
   return button;
 }
 function formatMemoTime(date) {
@@ -1458,7 +1384,7 @@ function formatMemoTime(date) {
 }
 
 // src/components/MemoComposer.ts
-var import_obsidian9 = require("obsidian");
+var import_obsidian8 = require("obsidian");
 var MemoComposer = class {
   constructor(owner, container, repository, onCreated, options = {}) {
     this.repository = repository;
@@ -1618,7 +1544,7 @@ var MemoComposer = class {
       }
     } catch (error) {
       console.error("[Markdown Memos] \u521B\u5EFA Memo \u5931\u8D25\u3002", error);
-      new import_obsidian9.Notice(`\u521B\u5EFA Memo \u5931\u8D25\uFF1A${errorMessage(error)}`);
+      new import_obsidian8.Notice(`\u521B\u5EFA Memo \u5931\u8D25\uFF1A${errorMessage(error)}`);
     } finally {
       this.setSubmitting(false);
     }
@@ -1769,7 +1695,7 @@ function ownerContextMenu(item, onDownload, onRemove) {
   item.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     event.stopPropagation();
-    const menu = new import_obsidian9.Menu();
+    const menu = new import_obsidian8.Menu();
     menu.addItem((entry) => entry.setTitle("\u4E0B\u8F7D").setIcon("download").onClick(onDownload));
     menu.addItem((entry) => entry.setTitle("\u5220\u9664").setIcon("trash-2").onClick(onRemove));
     menu.showAtMouseEvent(event);
@@ -1788,7 +1714,7 @@ function renderTextWithTags(container, text) {
 }
 
 // src/components/MemoList.ts
-var import_obsidian10 = require("obsidian");
+var import_obsidian9 = require("obsidian");
 var MemoList = class {
   constructor(owner, container, callbacks) {
     this.callbacks = callbacks;
@@ -1863,7 +1789,7 @@ var MemoList = class {
         cls: "obsidian-memos-list-row__delete",
         attr: { type: "button", "data-swipe-delete": "true", "aria-label": "\u5220\u9664 Memo", title: "\u5220\u9664" }
       });
-      (0, import_obsidian10.setIcon)(deleteButton, "trash-2");
+      (0, import_obsidian9.setIcon)(deleteButton, "trash-2");
       deleteButton.addEventListener("pointerdown", (event) => event.stopPropagation());
       deleteButton.addEventListener("pointerup", (event) => event.stopPropagation());
       deleteButton.addEventListener("click", (event) => {
@@ -1941,6 +1867,61 @@ function getDateGroup(memo) {
   }
   return new Intl.DateTimeFormat(void 0, { year: "numeric", month: "long" }).format(memo.modified);
 }
+
+// src/components/MemoDeleteModal.ts
+var import_obsidian10 = require("obsidian");
+var MemoDeleteModal = class extends import_obsidian10.Modal {
+  constructor(app, memo, resolve) {
+    super(app);
+    this.memo = memo;
+    this.resolve = resolve;
+    this.resolved = false;
+  }
+  onOpen() {
+    this.setTitle("\u5220\u9664\u8FD9\u6761 Memo\uFF1F");
+    this.contentEl.createEl("p", { text: `\u201C${previewContent(this.memo.content)}\u201D` });
+    this.contentEl.createEl("p", {
+      cls: "setting-item-description",
+      text: "\u6587\u4EF6\u5C06\u901A\u8FC7 Obsidian \u7684\u56DE\u6536\u7AD9\u8BBE\u7F6E\u5B89\u5168\u5220\u9664\u3002"
+    });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
+    const confirm = actions.createEl("button", {
+      cls: "mod-warning",
+      text: "\u5220\u9664",
+      attr: { type: "button" }
+    });
+    cancel.addEventListener("click", () => this.finish(false));
+    confirm.addEventListener("click", () => this.finish(true));
+    confirm.focus();
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (!this.resolved) {
+      this.resolved = true;
+      this.resolve(false);
+    }
+  }
+  finish(confirmed) {
+    if (this.resolved) {
+      return;
+    }
+    this.resolved = true;
+    this.resolve(confirmed);
+    this.close();
+  }
+};
+function confirmMemoDeletion(app, memo) {
+  return new Promise((resolve) => new MemoDeleteModal(app, memo, resolve).open());
+}
+function previewContent(content) {
+  const singleLine = content.replace(/\s+/g, " ").trim();
+  if (!singleLine) {
+    return memoFallback;
+  }
+  return singleLine.length > 80 ? `${singleLine.slice(0, 80)}\u2026` : singleLine;
+}
+var memoFallback = "\u7A7A Memo";
 
 // src/views/MemosView.ts
 var MEMOS_VIEW_TYPE = "obsidian-memos-view";

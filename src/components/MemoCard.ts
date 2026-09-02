@@ -4,7 +4,6 @@ import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoAttachment, MemoRecord } from "../types";
 import { errorMessage, extractExternalUrls, joinMemoContent, splitMemoContent } from "../utils";
 import { MemoAttachmentList } from "./MemoAttachmentList";
-import { confirmMemoDeletion } from "./MemoDeleteModal";
 import { createTagSuggestionControl } from "./TagSuggestionControl";
 import { openTextEditingMenu } from "./TextEditingMenu";
 
@@ -252,12 +251,10 @@ export class MemoCard {
     // Keep mobile attachments available while editing so images/files can still
     // be opened without leaving the editor. Desktop keeps its existing editor
     // layout unchanged.
-    if (this.options.isMobileLayout?.()) {
-      new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
-        this.display,
-        this.memo.attachments,
-      );
-    }
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+      this.display,
+      this.memo.attachments,
+    );
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
     this.resizeMobileBodyEditor(textarea);
@@ -426,25 +423,10 @@ export class MemoCard {
   }
 
   private async deleteMemo(): Promise<void> {
-    if (this.options.isMobileLayout?.()) {
-      await this.trashImmediately();
-      return;
-    }
-    if (!(await confirmMemoDeletion(this.app, this.memo))) return;
-    try {
-      await this.repository.deleteMemo(this.memo.file);
-      await this.options.onChanged();
-    } catch (error) {
-      console.error(`[Markdown Memos] 删除失败：${this.memo.file.path}`, error);
-      new Notice(`删除 Memo 失败：${errorMessage(error)}`);
-    }
+    await this.trashImmediately();
   }
 
   private async handleDeleteClick(): Promise<void> {
-    if (!this.options.isMobileLayout?.()) {
-      await this.deleteMemo();
-      return;
-    }
     if (!this.deleteArmed) {
       this.deleteArmed = true;
       this.deleteButton.addClass("is-delete-armed");
