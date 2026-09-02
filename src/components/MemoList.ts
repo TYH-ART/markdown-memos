@@ -252,7 +252,7 @@ export function getMemoListTitle(content: string): string {
   return firstBodyLine ? firstBodyLine.replace(/^[-*+]\s+/, "").slice(0, 80) : "无标题 Memo";
 }
 
-function getSummary(content: string): string {
+export function getSummary(content: string): string {
   const parts = splitMemoContent(content);
   const lines = parts.body
     .split("\n")
@@ -264,7 +264,7 @@ function getSummary(content: string): string {
   return lines.slice(0, 2).join(" ").replace(/[*_`]/g, "").slice(0, 120);
 }
 
-function formatListDate(date: Date): string {
+export function formatListDate(date: Date): string {
   const now = new Date();
   const isToday = date.getFullYear() === now.getFullYear()
     && date.getMonth() === now.getMonth()

@@ -2,7 +2,7 @@ import { ItemView, Menu, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidi
 import type ObsidianMemosPlugin from "../main";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
-import { getMemoListTitle, MemoList } from "../components/MemoList";
+import { formatListDate, getMemoListTitle, getSummary, MemoList } from "../components/MemoList";
 import { confirmMemoDeletion } from "../components/MemoDeleteModal";
 import type { MemoRecord } from "../types";
 import type { MemoNotebook } from "../types";
@@ -340,7 +340,15 @@ export class MemosView extends ItemView {
       return;
     }
     for (const memo of memos.slice(0, 30)) {
-      const button = contents.createEl("button", { text: getMemoListTitle(memo.content), attr: { type: "button" } });
+      const button = contents.createEl("button", {
+        cls: "obsidian-memos-mobile-library__content-item",
+        attr: { type: "button" },
+      });
+      const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
+      if (memo.pinned) titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-pin", text: "📌" });
+      titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
+      const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
+      button.createDiv({ cls: "obsidian-memos-mobile-library__content-summary", text: preview });
       this.registerDomEvent(button, "click", () => {
         this.showTrash = false;
         this.mobileDetail = true;

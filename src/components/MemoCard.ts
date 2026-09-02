@@ -296,7 +296,7 @@ export class MemoCard {
     textarea.setCssProps({ height: "0px" });
     const computed = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computed.lineHeight) || 26;
-    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight * 2)}px` });
+    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight)}px` });
   }
 
   private exitReadingMode(): void {

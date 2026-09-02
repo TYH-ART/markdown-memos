@@ -1263,7 +1263,7 @@ var MemoCard = class {
     textarea.setCssProps({ height: "0px" });
     const computed = window.getComputedStyle(textarea);
     const lineHeight = Number.parseFloat(computed.lineHeight) || 26;
-    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight * 2)}px` });
+    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight)}px` });
   }
   exitReadingMode() {
     this.article.removeClass("is-reading-mode");
@@ -2374,7 +2374,15 @@ var MemosView = class extends import_obsidian11.ItemView {
       return;
     }
     for (const memo of memos.slice(0, 30)) {
-      const button = contents.createEl("button", { text: getMemoListTitle(memo.content), attr: { type: "button" } });
+      const button = contents.createEl("button", {
+        cls: "obsidian-memos-mobile-library__content-item",
+        attr: { type: "button" }
+      });
+      const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
+      if (memo.pinned) titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-pin", text: "\u{1F4CC}" });
+      titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
+      const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
+      button.createDiv({ cls: "obsidian-memos-mobile-library__content-summary", text: preview });
       this.registerDomEvent(button, "click", () => {
         this.showTrash = false;
         this.mobileDetail = true;
