@@ -1959,7 +1959,9 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.memos = [];
     this.searchQuery = "";
     this.sortOption = "modified-desc";
-    this.mobileDetail = false;
+    // Mobile views should open on the memo feed. The sidebar is explicitly
+    // opened with the toolbar button or by swiping from the right edge.
+    this.mobileDetail = true;
     this.refreshSequence = 0;
     this.isDraggingDivider = false;
   }

@@ -36,7 +36,9 @@ export class MemosView extends ItemView {
   private mobileTagButton?: HTMLButtonElement;
   private sortSelect?: HTMLSelectElement;
   private sortOption: MemoSort = "modified-desc";
-  private mobileDetail = false;
+  // Mobile views should open on the memo feed. The sidebar is explicitly
+  // opened with the toolbar button or by swiping from the right edge.
+  private mobileDetail = true;
   private refreshSequence = 0;
   private isDraggingDivider = false;
   private editingPath?: string;
