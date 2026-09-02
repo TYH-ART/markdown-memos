@@ -1455,6 +1455,12 @@ var MemoComposer = class {
       this.tagTarget = this.textarea;
       this.expandMobileComposer();
     });
+    owner.registerDomEvent(composer, "focusout", (event) => {
+      const nextTarget = event.relatedTarget;
+      if (!(nextTarget instanceof Node) || !composer.contains(nextTarget)) {
+        composer.removeClass("is-mobile-expanded");
+      }
+    });
     owner.registerDomEvent(this.titleInput, "contextmenu", (event) => openTextEditingMenu(this.titleInput, event));
     owner.registerDomEvent(this.textarea, "contextmenu", (event) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
@@ -2044,6 +2050,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     const applySearch = () => {
       this.searchQuery = searchInput.value;
       searchShell.toggleClass("has-query", Boolean(this.searchQuery));
+      if (this.isMobileLayout()) this.mobileDetail = true;
       void this.applyCurrentFilters();
     };
     this.registerDomEvent(searchInput, "input", applySearch);
@@ -2212,7 +2219,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     });
     const requestedPath = preferredPath != null ? preferredPath : this.selectedPath;
     this.selectedPath = this.memos.some((memo) => memo.file.path === requestedPath) ? requestedPath : (_a = this.memos[0]) == null ? void 0 : _a.file.path;
-    if (!this.selectedPath && this.mobileDetail) {
+    if (!this.selectedPath && this.mobileDetail && !this.searchQuery.trim()) {
       this.mobileDetail = false;
     }
     (_b = this.listCountLabel) == null ? void 0 : _b.setText(this.memos.length === this.allMemos.length ? String(this.memos.length) : `${this.memos.length}/${this.allMemos.length}`);

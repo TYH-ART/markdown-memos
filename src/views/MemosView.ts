@@ -144,6 +144,9 @@ export class MemosView extends ItemView {
     const applySearch = (): void => {
       this.searchQuery = searchInput.value;
       searchShell.toggleClass("has-query", Boolean(this.searchQuery));
+      // A search started from the main toolbar must keep the detail feed open,
+      // even while the query temporarily has no matches.
+      if (this.isMobileLayout()) this.mobileDetail = true;
       void this.applyCurrentFilters();
     };
     this.registerDomEvent(searchInput, "input", applySearch);
@@ -320,7 +323,7 @@ export class MemosView extends ItemView {
 
     const requestedPath = preferredPath ?? this.selectedPath;
     this.selectedPath = this.memos.some((memo) => memo.file.path === requestedPath) ? requestedPath : this.memos[0]?.file.path;
-    if (!this.selectedPath && this.mobileDetail) {
+    if (!this.selectedPath && this.mobileDetail && !this.searchQuery.trim()) {
       this.mobileDetail = false;
     }
     this.listCountLabel?.setText(this.memos.length === this.allMemos.length ? String(this.memos.length) : `${this.memos.length}/${this.allMemos.length}`);

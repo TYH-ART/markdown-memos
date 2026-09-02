@@ -1030,6 +1030,13 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-actions,
   display: none;
 }
 
+body.is-mobile .workspace-leaf-content[data-type="obsidian-memos-view"] .view-header,
+body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
+.workspace-leaf-content:has(.obsidian-memos-view.is-mobile) .view-header {
+  border-bottom: 0 !important;
+  box-shadow: none !important;
+}
+
 .obsidian-memos-view.is-mobile {
   overflow: visible;
 }
@@ -1039,7 +1046,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-actions,
   height: 100%;
   min-height: 0;
   overflow: visible;
-  padding: max(10px, env(safe-area-inset-top))
+  padding: 0
     max(10px, env(safe-area-inset-right))
     max(36px, env(safe-area-inset-bottom))
     max(10px, env(safe-area-inset-left));
@@ -1048,7 +1055,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-actions,
 .is-mobile .obsidian-memos-toolbar {
   position: absolute;
   z-index: 10;
-  top: calc(0px - var(--header-height, 50px));
+  top: calc(0px - var(--header-height, 50px) - 14px);
   right: max(10px, env(safe-area-inset-right));
   left: 52px;
   height: var(--header-height, 50px);
@@ -1101,6 +1108,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-actions,
   background: var(--background-modifier-hover);
   color: var(--text-normal);
   box-shadow: none;
+  display: none;
 }
 
 .is-mobile .obsidian-memos-toolbar__new-label.is-full {
@@ -1282,7 +1290,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-actions,
   flex: 1 1 auto;
   flex-direction: column;
   overflow: hidden;
-  padding: 10px 0 0;
+  padding: 0;
 }
 
 .is-mobile .obsidian-memos-detail-card-host,

@@ -106,6 +106,12 @@ export class MemoComposer {
       this.tagTarget = this.textarea;
       this.expandMobileComposer();
     });
+    owner.registerDomEvent(composer, "focusout", (event: FocusEvent) => {
+      const nextTarget = event.relatedTarget;
+      if (!(nextTarget instanceof Node) || !composer.contains(nextTarget)) {
+        composer.removeClass("is-mobile-expanded");
+      }
+    });
     owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event));
     owner.registerDomEvent(this.textarea, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
