@@ -13,6 +13,7 @@ export interface MemoCardOptions {
   attachmentService: AttachmentService;
   onEditingChange?: (editing: boolean) => void;
   getPopularTags?: () => string[];
+  isMobileLayout?: () => boolean;
 }
 
 export class MemoCard {
@@ -221,6 +222,10 @@ export class MemoCard {
       this.scheduleAutoSave(content);
       titleInput.setCssProps({ height: "auto" });
       titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
+      if (this.options.isMobileLayout?.()) {
+        textarea.setCssProps({ height: "auto" });
+        textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
+      }
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -244,6 +249,10 @@ export class MemoCard {
     this.renderDetectedLinks(links, this.memo.content);
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
+    if (this.options.isMobileLayout?.()) {
+      textarea.setCssProps({ height: "auto" });
+      textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
+    }
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
     initialTarget.focus();
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);

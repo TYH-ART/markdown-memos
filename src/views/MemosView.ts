@@ -287,6 +287,7 @@ export class MemosView extends ItemView {
           this.editingPath = editing ? memo.file.path : undefined;
         },
         getPopularTags: () => this.getPopularTags(3),
+        isMobileLayout: () => this.isMobileLayout(),
       });
       this.detailCards.push(card);
       await card.render();

@@ -1127,7 +1127,7 @@ var MemoCard = class {
     );
   }
   async startEditing(tagToInsert) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
@@ -1164,10 +1164,15 @@ var MemoCard = class {
     const links = this.display.createDiv({ cls: "obsidian-memos-card__editor-links" });
     this.display.createDiv({ cls: "obsidian-memos-card__autosave-hint", text: "\u81EA\u52A8\u4FDD\u5B58" });
     const updateDraft = () => {
+      var _a2, _b2;
       const content = joinMemoContent(titleInput.value, textarea.value);
       this.scheduleAutoSave(content);
       titleInput.setCssProps({ height: "auto" });
       titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
+      if ((_b2 = (_a2 = this.options).isMobileLayout) == null ? void 0 : _b2.call(_a2)) {
+        textarea.setCssProps({ height: "auto" });
+        textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
+      }
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -1197,6 +1202,10 @@ var MemoCard = class {
     this.renderDetectedLinks(links, this.memo.content);
     titleInput.setCssProps({ height: "auto" });
     titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
+    if ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) {
+      textarea.setCssProps({ height: "auto" });
+      textarea.setCssProps({ height: `${textarea.scrollHeight}px` });
+    }
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
     initialTarget.focus();
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
@@ -2185,7 +2194,8 @@ var MemosView = class extends import_obsidian11.ItemView {
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : void 0;
         },
-        getPopularTags: () => this.getPopularTags(3)
+        getPopularTags: () => this.getPopularTags(3),
+        isMobileLayout: () => this.isMobileLayout()
       });
       this.detailCards.push(card);
       await card.render();
