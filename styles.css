@@ -1055,7 +1055,7 @@ body.is-mobile .workspace-leaf-content:has(.obsidian-memos-view) .view-header,
 .is-mobile .obsidian-memos-toolbar {
   position: absolute;
   z-index: 10;
-  top: calc(0px - var(--header-height, 50px) - 8px);
+  top: calc(0px - var(--header-height, 50px) - 28px);
   right: max(10px, env(safe-area-inset-right));
   left: 68px;
   height: var(--header-height, 50px);
