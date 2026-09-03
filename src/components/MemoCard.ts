@@ -14,6 +14,7 @@ export interface MemoCardOptions {
   getPopularTags?: () => string[];
   isMobileLayout?: () => boolean;
   trashMode?: boolean;
+  onMove?: () => void;
 }
 
 export class MemoCard {
@@ -59,13 +60,11 @@ export class MemoCard {
       attr: { datetime: memo.created.toISOString() },
     });
     time.setAttr("title", `创建：${memo.created.toLocaleString()}\n修改：${memo.modified.toLocaleString()}`);
-    if (memo.pinned) {
-      const pinned = metadata.createSpan({ cls: "obsidian-memos-card__pinned", attr: { "aria-label": "已置顶", title: "已置顶" } });
-      setIcon(pinned, "pin");
-    }
-
     const actions = header.createDiv({ cls: "obsidian-memos-card__toolbar" });
-    const pinButton = createIconButton(actions, "pin", memo.pinned ? "取消置顶" : "置顶");
+    const pinButton = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button" } });
+    setIcon(pinButton, "pin");
+    pinButton.toggleClass("is-pinned", memo.pinned);
+    pinButton.setAttr("aria-pressed", String(memo.pinned));
     createTagSuggestionControl(owner, actions, {
       className: "is-card",
       getSuggestions: () => this.options.getPopularTags?.() ?? [],
@@ -80,6 +79,11 @@ export class MemoCard {
     owner.registerDomEvent(deleteButton, "click", (event: MouseEvent) => {
       event.stopPropagation();
       void this.handleDeleteClick();
+    });
+    owner.registerDomEvent(this.article.ownerDocument, "pointerdown", (event: PointerEvent) => {
+      if (!this.deleteArmed) return;
+      const target = event.target instanceof Node ? event.target : null;
+      if (!target || !this.deleteButton.contains(target)) this.clearDeleteArmed();
     });
     owner.registerDomEvent(readingCloseButton, "click", () => this.exitReadingMode());
     owner.registerDomEvent(this.article, "contextmenu", (event: MouseEvent) => {
@@ -98,7 +102,14 @@ export class MemoCard {
     });
     owner.registerDomEvent(this.article, "click", (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
-      if (target?.closest("a, button, select")) return;
+      if (target?.closest("a, button, select, input, textarea")) return;
+      if (this.article.hasClass("is-editing") && event.detail === 1) {
+        event.preventDefault();
+        const title = this.editorTitleInput?.value ?? "";
+        const body = this.editorTextarea?.value ?? "";
+        void this.finishEditing(joinMemoContent(title, body));
+        return;
+      }
       if (event.detail === 2) {
         event.preventDefault();
         if (this.article.hasClass("is-editing")) {
@@ -142,9 +153,12 @@ export class MemoCard {
 
   private openMenu(event: MouseEvent): void {
     const menu = new Menu();
-    menu.addItem((item) => item.setTitle(this.memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinned()));
-    menu.addItem((item) => item.setTitle("#").setIcon("hash").onClick(() => void this.addTag("#")));
-    menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemo()));
+    menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.options.onMove?.()));
+    if (!this.options.isMobileLayout?.()) {
+      menu.addItem((item) => item.setTitle(this.memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinned()));
+      menu.addItem((item) => item.setTitle("#").setIcon("hash").onClick(() => void this.addTag("#")));
+      menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemo()));
+    }
     menu.showAtMouseEvent(event);
   }
 
@@ -422,17 +436,30 @@ export class MemoCard {
     }
   }
 
-  private async deleteMemo(): Promise<void> {
-    await this.trashImmediately();
-  }
-
   private async handleDeleteClick(): Promise<void> {
     if (!this.deleteArmed) {
       this.deleteArmed = true;
       this.deleteButton.addClass("is-delete-armed");
       this.deleteButton.setAttr("aria-label", "再次点击移入回收站");
+      this.deleteButton.setAttr("title", "再次点击移入回收站");
       return;
     }
+    if (this.options.isMobileLayout?.()) {
+      await this.trashImmediately();
+      return;
+    }
+    await this.deleteImmediately();
+  }
+
+  private clearDeleteArmed(): void {
+    if (!this.deleteArmed) return;
+    this.deleteArmed = false;
+    this.deleteButton.removeClass("is-delete-armed");
+    this.deleteButton.setAttr("aria-label", "删除 Memo");
+    this.deleteButton.setAttr("title", "删除");
+  }
+
+  private async deleteMemo(): Promise<void> {
     await this.trashImmediately();
   }
 
@@ -443,6 +470,16 @@ export class MemoCard {
     } catch (error) {
       console.error(`[Markdown Memos] 移入回收站失败：${this.memo.file.path}`, error);
       new Notice(`移入回收站失败：${errorMessage(error)}`);
+    }
+  }
+
+  private async deleteImmediately(): Promise<void> {
+    try {
+      await this.repository.deleteMemo(this.memo.file);
+      await this.options.onChanged();
+    } catch (error) {
+      console.error(`[Markdown Memos] 删除失败：${this.memo.file.path}`, error);
+      new Notice(`删除失败：${errorMessage(error)}`);
     }
   }
 

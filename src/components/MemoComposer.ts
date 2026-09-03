@@ -1,4 +1,4 @@
-import { Menu, Notice } from "obsidian";
+import { Menu, Notice, setIcon } from "obsidian";
 import type { Component, TFile } from "obsidian";
 import type { AttachmentService } from "../services/AttachmentService";
 import { inferMime } from "../services/AttachmentService";
@@ -75,12 +75,15 @@ export class MemoComposer {
       className: "is-composer",
       getSuggestions: () => options.getPopularTags?.() ?? [],
       onSelect: (tag) => this.insertTag(tag),
+      onButtonClick: () => this.focus(),
     });
     const attachmentButton = tools.createEl("button", {
-      cls: "clickable-icon",
-      text: "📎",
+      cls: "clickable-icon obsidian-memos-composer__attachment-button",
       attr: { type: "button", "aria-label": "给当前 Memo 添加附件" },
     });
+    attachmentButton.createSpan({ cls: "obsidian-memos-composer__attachment-icon-desktop", text: "📎", attr: { "aria-hidden": "true" } });
+    const mobileAttachmentIcon = attachmentButton.createSpan({ cls: "obsidian-memos-composer__attachment-icon-mobile", attr: { "aria-hidden": "true" } });
+    setIcon(mobileAttachmentIcon, "circle-plus");
     const linkButton = tools.createEl("button", {
       cls: "clickable-icon",
       text: "🔗",
@@ -158,12 +161,8 @@ export class MemoComposer {
   }
 
   public focus(): void {
-    if (this.isMobileLayout()) {
-      this.expandMobileComposer();
-      this.textarea.focus();
-      return;
-    }
-    this.titleInput.focus();
+    this.expandMobileComposer();
+    this.textarea.focus();
   }
 
   private async submit(): Promise<void> {
@@ -221,8 +220,10 @@ export class MemoComposer {
   private updateTaskButton(): void {
     const isTask = this.memoType === "task";
     this.taskButton.toggleClass("is-active", isTask);
-    this.taskButton.setText(isTask ? "✓ 任务" : "○ 任务");
+    this.taskButton.setText(isTask ? "✓" : "○");
     this.taskButton.setAttr("aria-pressed", String(isTask));
+    this.taskButton.setAttr("aria-label", isTask ? "切换为普通 Memo" : "切换为任务");
+    this.taskButton.setAttr("title", isTask ? "切换为普通 Memo" : "切换为任务");
   }
 
   private insertTextAtCursor(text: string, target: HTMLInputElement | HTMLTextAreaElement): void {
@@ -247,7 +248,7 @@ export class MemoComposer {
 
   private async queueExternalAttachments(): Promise<void> {
     if (!this.attachmentService) return;
-    const files = await this.attachmentService.pickExternalAttachments();
+    const files = await this.attachmentService.pickExternalAttachments(this.isMobileLayout() ? "image/*,video/*" : "*/*");
     for (const file of files) {
       this.pendingAttachments.push({
         kind: "external",

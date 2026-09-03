@@ -112,7 +112,8 @@ export class MemoList {
       });
       const titleRow = item.createDiv({ cls: "obsidian-memos-list-item__title-row" });
       if (memo.pinned) {
-        titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", text: "📌", attr: { "aria-label": "已置顶" } });
+        const pin = titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", attr: { "aria-label": "已置顶", title: "已置顶" } });
+        setIcon(pin, "pin");
       }
       if (isTaskMemo(memo)) {
         titleRow.createEl("button", {

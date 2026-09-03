@@ -4,6 +4,7 @@ export interface TagSuggestionControlOptions {
   className?: string;
   getSuggestions: () => string[];
   onSelect: (tag: string) => void;
+  onButtonClick?: () => void;
 }
 
 export function createTagSuggestionControl(
@@ -27,6 +28,7 @@ export function createTagSuggestionControl(
   const hide = (): void => {
     cancelHide();
     popup.removeClass("is-open");
+    button.removeClass("is-active");
   };
   const scheduleHide = (): void => {
     cancelHide();
@@ -36,30 +38,43 @@ export function createTagSuggestionControl(
     cancelHide();
     popup.empty();
     const suggestions = options.getSuggestions().slice(0, 3);
-    if (suggestions.length === 0) return;
-    popup.createDiv({ cls: "obsidian-memos-tag-control__label", text: "常用标签" });
-    for (const tag of suggestions) {
-      const item = popup.createEl("button", { text: tag, attr: { type: "button" } });
-      owner.registerDomEvent(item, "mousedown", (event: MouseEvent) => event.preventDefault());
-      owner.registerDomEvent(item, "click", (event: MouseEvent) => {
-        event.preventDefault();
-        event.stopPropagation();
-        hide();
-        options.onSelect(tag);
-      });
+    if (suggestions.length > 0) {
+      popup.createDiv({ cls: "obsidian-memos-tag-control__label", text: "常用标签" });
+      for (const tag of suggestions) {
+        const item = popup.createEl("button", { text: tag, attr: { type: "button" } });
+        owner.registerDomEvent(item, "mousedown", (event: MouseEvent) => event.preventDefault());
+        owner.registerDomEvent(item, "click", (event: MouseEvent) => {
+          event.preventDefault();
+          event.stopPropagation();
+          hide();
+          options.onSelect(tag);
+        });
+      }
+      popup.addClass("is-open");
     }
-    popup.addClass("is-open");
+    button.addClass("is-active");
   };
 
   owner.registerDomEvent(button, "click", (event: MouseEvent) => {
     event.stopPropagation();
-    options.onSelect("#");
+    if (options.onButtonClick) {
+      options.onButtonClick();
+      show();
+    } else {
+      options.onSelect("#");
+    }
   });
   // Keep the active editor selection when the toolbar button is clicked.
   owner.registerDomEvent(button, "mousedown", (event: MouseEvent) => event.preventDefault());
-  owner.registerDomEvent(wrapper, "mouseenter", show);
-  owner.registerDomEvent(wrapper, "mouseleave", scheduleHide);
-  owner.registerDomEvent(popup, "mouseenter", cancelHide);
-  owner.registerDomEvent(popup, "mouseleave", scheduleHide);
+  if (!options.onButtonClick) {
+    owner.registerDomEvent(wrapper, "mouseenter", show);
+    owner.registerDomEvent(wrapper, "mouseleave", scheduleHide);
+    owner.registerDomEvent(popup, "mouseenter", cancelHide);
+    owner.registerDomEvent(popup, "mouseleave", scheduleHide);
+  }
+  owner.registerDomEvent(document, "pointerdown", (event: PointerEvent) => {
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target || !wrapper.contains(target)) hide();
+  });
   return button;
 }

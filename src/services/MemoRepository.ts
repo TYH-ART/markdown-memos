@@ -125,6 +125,14 @@ export class MemoRepository {
     }
   }
 
+  public async moveMemoToNotebook(file: TFile, notebookId: string): Promise<MemoRecord> {
+    const currentFile = this.requireFile(file);
+    await this.updateFrontmatter(currentFile, (frontmatter) => {
+      frontmatter.notebookId = notebookId;
+    });
+    return this.readMemo(currentFile);
+  }
+
   public async togglePinned(file: TFile): Promise<MemoRecord> {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {

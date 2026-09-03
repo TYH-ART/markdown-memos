@@ -20,8 +20,8 @@ export class AttachmentService {
     return this.addExternalFiles(memoFile, files);
   }
 
-  public pickExternalAttachments(): Promise<File[]> {
-    return this.pickExternalFiles();
+  public pickExternalAttachments(accept = "*/*"): Promise<File[]> {
+    return this.pickExternalFiles(accept);
   }
 
   public async addExternalFiles(memoFile: TFile, files: File[]): Promise<number> {
@@ -115,12 +115,12 @@ export class AttachmentService {
     return memos.some((memo) => memo.file.path !== excludingMemoPath && memo.attachments.some((attachment) => attachment.path === path));
   }
 
-  private pickExternalFiles(): Promise<File[]> {
+  private pickExternalFiles(accept = "*/*"): Promise<File[]> {
     return new Promise((resolve) => {
       const input = this.app.workspace.containerEl.createEl("input");
       input.type = "file";
       input.multiple = true;
-      input.accept = "*/*";
+      input.accept = accept;
       let resolved = false;
       const finish = (files: File[]): void => {
         if (resolved) return;
