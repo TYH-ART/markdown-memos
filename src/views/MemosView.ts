@@ -70,6 +70,7 @@ export class MemosView extends ItemView {
     }
     this.contentEl.empty();
     this.contentEl.addClass("obsidian-memos-view");
+    this.containerEl.addClass("obsidian-memos-view-container");
     this.buildLayout();
     await this.refresh();
   }
@@ -85,6 +86,7 @@ export class MemosView extends ItemView {
     this.mobileTrashButton = undefined;
     this.mobileTrashToolbar = undefined;
     this.mobileDrawerButton = undefined;
+    this.containerEl.removeClass("obsidian-memos-view-container", "is-mobile");
     this.contentEl.empty();
   }
 
@@ -406,12 +408,12 @@ export class MemosView extends ItemView {
   private async createNotebook(): Promise<void> {
     const name = await this.promptNotebookName("新建备忘录");
     if (!name?.trim()) return;
-    const isPrivate = window.confirm("是否创建为私密备忘录？");
+    const isPrivate = await confirmAction(this.app, "是否创建为私密备忘录？");
     let passwordHash: string | undefined;
     if (isPrivate) {
-      const password = window.prompt("设置访问密码");
+      const password = await requestText(this.app, "设置访问密码", "请输入访问密码", "password");
       if (!password) return;
-      const confirmation = window.prompt("再次输入密码");
+      const confirmation = await requestText(this.app, "再次输入密码", "请再次输入访问密码", "password");
       if (confirmation !== password) {
         new Notice("两次输入的密码不一致");
         return;
@@ -458,7 +460,7 @@ export class MemosView extends ItemView {
 
   private async deleteNotebook(notebook: MemoNotebook): Promise<void> {
     if (this.plugin.settings.memoNotebooks.length <= 1) return;
-    if (!window.confirm(`删除“${notebook.name}”？其中的 Memo 将移动到默认备忘录。`)) return;
+    if (!await confirmAction(this.app, `删除“${notebook.name}”？其中的 Memo 将移动到默认备忘录。`)) return;
     const fallback = this.plugin.settings.memoNotebooks.find((item) => item.id !== notebook.id);
     if (!fallback) return;
     await this.plugin.repository.moveMemosToNotebook(notebook.id, fallback.id);
@@ -479,9 +481,9 @@ export class MemosView extends ItemView {
   private async selectNotebook(notebook: MemoNotebook): Promise<void> {
     if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
       if (!notebook.passwordHash) {
-        const password = window.prompt(`为“${notebook.name}”设置密码`);
+        const password = await requestText(this.app, `为“${notebook.name}”设置密码`, "请输入访问密码", "password");
         if (!password) return;
-        const confirmation = window.prompt("再次输入密码");
+        const confirmation = await requestText(this.app, "再次输入密码", "请再次输入访问密码", "password");
         if (confirmation !== password) {
           new Notice("两次输入的密码不一致");
           return;
@@ -489,7 +491,7 @@ export class MemosView extends ItemView {
         notebook.passwordHash = await hashNotebookPassword(password);
         await this.plugin.saveSettings();
       } else {
-        const password = window.prompt(`输入“${notebook.name}”的密码`);
+        const password = await requestText(this.app, `输入“${notebook.name}”的密码`, "请输入访问密码", "password");
         if (!password || await hashNotebookPassword(password) !== notebook.passwordHash) {
           new Notice("密码错误");
           return;
@@ -514,7 +516,7 @@ export class MemosView extends ItemView {
   }
 
   private async emptyTrash(): Promise<void> {
-    if (!window.confirm("确定永久清空当前备忘录的回收站吗？此操作无法撤销。")) return;
+    if (!await confirmAction(this.app, "确定永久清空当前备忘录的回收站吗？此操作无法撤销。")) return;
     await this.plugin.repository.emptyTrash();
     await this.refresh();
   }
@@ -873,6 +875,7 @@ export class MemosView extends ItemView {
     this.contentEl.toggleClass("is-list-right", this.plugin.settings.listPanePosition === "right");
     this.contentEl.toggleClass("is-list-collapsed", this.plugin.settings.listPaneCollapsed);
     this.contentEl.toggleClass("is-mobile", this.isMobileLayout());
+    this.containerEl.toggleClass("is-mobile", this.isMobileLayout());
     this.contentEl.toggleClass("is-mobile-detail", this.mobileDetail);
     this.contentEl.toggleClass("is-trash-mode", this.showTrash);
     this.mobileTrashToolbar?.toggleClass("is-visible", this.showTrash);
@@ -960,8 +963,10 @@ class NotebookNameModal extends Modal {
 
   public override onOpen(): void {
     this.titleEl.setText(this.heading);
-    const input = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "备忘录名称", value: this.initial } });
-    input.style.width = "100%";
+    const input = this.contentEl.createEl("input", {
+      cls: "obsidian-memos-modal-input",
+      attr: { type: "text", placeholder: "备忘录名称", value: this.initial },
+    });
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
     const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
     const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
@@ -990,4 +995,103 @@ class NotebookNameModal extends Modal {
     if (!this.submitted) this.resolveName(null);
     this.contentEl.empty();
   }
+}
+
+class ConfirmActionModal extends Modal {
+  private resolved = false;
+
+  public constructor(
+    app: App,
+    private readonly message: string,
+    private readonly resolveResult: (confirmed: boolean) => void,
+  ) {
+    super(app);
+  }
+
+  public override onOpen(): void {
+    this.titleEl.setText("确认操作");
+    this.contentEl.createEl("p", { text: this.message });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
+    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
+    cancel.addEventListener("click", () => this.finish(false));
+    confirm.addEventListener("click", () => this.finish(true));
+    confirm.focus();
+  }
+
+  public override onClose(): void {
+    this.contentEl.empty();
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveResult(false);
+  }
+
+  private finish(confirmed: boolean): void {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveResult(confirmed);
+    this.close();
+  }
+}
+
+function confirmAction(app: App, message: string): Promise<boolean> {
+  return new Promise((resolve) => new ConfirmActionModal(app, message, resolve).open());
+}
+
+class TextInputModal extends Modal {
+  private resolved = false;
+
+  public constructor(
+    app: App,
+    private readonly heading: string,
+    private readonly placeholder: string,
+    private readonly inputType: "text" | "password",
+    private readonly resolveValue: (value: string | null) => void,
+  ) {
+    super(app);
+  }
+
+  public override onOpen(): void {
+    this.titleEl.setText(this.heading);
+    const input = this.contentEl.createEl("input", {
+      cls: "obsidian-memos-modal-input",
+      attr: { type: this.inputType, placeholder: this.placeholder },
+    });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "取消", attr: { type: "button" } });
+    const confirm = actions.createEl("button", { text: "确定", cls: "mod-cta", attr: { type: "button" } });
+    const submit = (): void => {
+      if (this.resolved) return;
+      this.resolved = true;
+      this.resolveValue(input.value);
+      this.close();
+    };
+    cancel.addEventListener("click", () => this.close());
+    confirm.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      submit();
+    });
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  public override onClose(): void {
+    this.contentEl.empty();
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveValue(null);
+  }
+}
+
+function requestText(
+  app: App,
+  heading: string,
+  placeholder: string,
+  inputType: "text" | "password" = "text",
+): Promise<string | null> {
+  return new Promise((resolve) => new TextInputModal(app, heading, placeholder, inputType, resolve).open());
 }

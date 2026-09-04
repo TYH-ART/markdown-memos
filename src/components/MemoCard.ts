@@ -4,7 +4,6 @@ import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoAttachment, MemoRecord } from "../types";
 import { errorMessage, extractExternalUrls, joinMemoContent, splitMemoContent } from "../utils";
 import { MemoAttachmentList } from "./MemoAttachmentList";
-import { createTagSuggestionControl } from "./TagSuggestionControl";
 import { openTextEditingMenu } from "./TextEditingMenu";
 
 export interface MemoCardOptions {
@@ -65,11 +64,6 @@ export class MemoCard {
     setIcon(pinButton, "pin");
     pinButton.toggleClass("is-pinned", memo.pinned);
     pinButton.setAttr("aria-pressed", String(memo.pinned));
-    createTagSuggestionControl(owner, actions, {
-      className: "is-card",
-      getSuggestions: () => this.options.getPopularTags?.() ?? [],
-      onSelect: (tag) => void this.addTag(tag),
-    });
     const deleteButton = createIconButton(actions, "trash-2", "删除 Memo");
     this.deleteButton = deleteButton;
     deleteButton.toggleClass("is-hidden", options.trashMode === true);

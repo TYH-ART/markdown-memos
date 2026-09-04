@@ -209,7 +209,7 @@ var MemoRepository = class {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {
       frontmatter.pinned = frontmatter.pinned !== true;
-    });
+    }, false);
     return this.readMemo(currentFile);
   }
   async setMemoType(file, type) {
@@ -400,11 +400,11 @@ ${body}${body.endsWith("\n") ? "" : "\n"}`;
     }
     return currentFile;
   }
-  async updateFrontmatter(file, update) {
+  async updateFrontmatter(file, update, updateModified = true) {
     await this.app.fileManager.processFrontMatter(file, (rawFrontmatter) => {
       const frontmatter = rawFrontmatter && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter) ? rawFrontmatter : {};
       update(frontmatter);
-      frontmatter.modified = formatLocalIso(/* @__PURE__ */ new Date());
+      if (updateModified) frontmatter.modified = formatLocalIso(/* @__PURE__ */ new Date());
     });
   }
   getUniqueMemoPath(date) {
@@ -857,72 +857,6 @@ function formatFileSize(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// src/components/TagSuggestionControl.ts
-function createTagSuggestionControl(owner, container, options) {
-  const wrapper = container.createSpan({ cls: `obsidian-memos-tag-control${options.className ? ` ${options.className}` : ""}` });
-  const button = wrapper.createEl("button", {
-    cls: "clickable-icon obsidian-memos-tag-control__button",
-    text: "#",
-    attr: { type: "button", "aria-label": "\u6DFB\u52A0\u6807\u7B7E", title: "\u6DFB\u52A0\u6807\u7B7E" }
-  });
-  const popup = wrapper.createDiv({ cls: "obsidian-memos-tag-control__popup" });
-  let hideTimer;
-  const cancelHide = () => {
-    if (hideTimer !== void 0) window.clearTimeout(hideTimer);
-    hideTimer = void 0;
-  };
-  const hide = () => {
-    cancelHide();
-    popup.removeClass("is-open");
-    button.removeClass("is-active");
-  };
-  const scheduleHide = () => {
-    cancelHide();
-    hideTimer = window.setTimeout(hide, 140);
-  };
-  const show = () => {
-    cancelHide();
-    popup.empty();
-    const suggestions = options.getSuggestions().slice(0, 3);
-    if (suggestions.length > 0) {
-      popup.createDiv({ cls: "obsidian-memos-tag-control__label", text: "\u5E38\u7528\u6807\u7B7E" });
-      for (const tag of suggestions) {
-        const item = popup.createEl("button", { text: tag, attr: { type: "button" } });
-        owner.registerDomEvent(item, "mousedown", (event) => event.preventDefault());
-        owner.registerDomEvent(item, "click", (event) => {
-          event.preventDefault();
-          event.stopPropagation();
-          hide();
-          options.onSelect(tag);
-        });
-      }
-      popup.addClass("is-open");
-    }
-    button.addClass("is-active");
-  };
-  owner.registerDomEvent(button, "click", (event) => {
-    event.stopPropagation();
-    if (options.onButtonClick) {
-      options.onButtonClick();
-      show();
-    } else {
-      options.onSelect("#");
-    }
-  });
-  owner.registerDomEvent(button, "mousedown", (event) => event.preventDefault());
-  if (!options.onButtonClick) {
-    owner.registerDomEvent(wrapper, "mouseenter", show);
-    owner.registerDomEvent(wrapper, "mouseleave", scheduleHide);
-    owner.registerDomEvent(popup, "mouseenter", cancelHide);
-    owner.registerDomEvent(popup, "mouseleave", scheduleHide);
-  }
-  owner.registerDomEvent(document, "pointerdown", (event) => {
-    const target = event.target instanceof Node ? event.target : null;
-    if (!target || !wrapper.contains(target)) hide();
-  });
-  return button;
-}
-
 // src/components/TextEditingMenu.ts
 var import_obsidian6 = require("obsidian");
 function openTextEditingMenu(control, event) {
@@ -1014,14 +948,6 @@ var MemoCard = class {
     (0, import_obsidian7.setIcon)(pinButton, "pin");
     pinButton.toggleClass("is-pinned", memo.pinned);
     pinButton.setAttr("aria-pressed", String(memo.pinned));
-    createTagSuggestionControl(owner, actions, {
-      className: "is-card",
-      getSuggestions: () => {
-        var _a, _b, _c;
-        return (_c = (_b = (_a = this.options).getPopularTags) == null ? void 0 : _b.call(_a)) != null ? _c : [];
-      },
-      onSelect: (tag) => void this.addTag(tag)
-    });
     const deleteButton = createIconButton(actions, "trash-2", "\u5220\u9664 Memo");
     this.deleteButton = deleteButton;
     deleteButton.toggleClass("is-hidden", options.trashMode === true);
@@ -1446,6 +1372,74 @@ function formatMemoTime(date) {
 
 // src/components/MemoComposer.ts
 var import_obsidian8 = require("obsidian");
+
+// src/components/TagSuggestionControl.ts
+function createTagSuggestionControl(owner, container, options) {
+  const wrapper = container.createSpan({ cls: `obsidian-memos-tag-control${options.className ? ` ${options.className}` : ""}` });
+  const button = wrapper.createEl("button", {
+    cls: "clickable-icon obsidian-memos-tag-control__button",
+    text: "#",
+    attr: { type: "button", "aria-label": "\u6DFB\u52A0\u6807\u7B7E", title: "\u6DFB\u52A0\u6807\u7B7E" }
+  });
+  const popup = wrapper.createDiv({ cls: "obsidian-memos-tag-control__popup" });
+  let hideTimer;
+  const cancelHide = () => {
+    if (hideTimer !== void 0) window.clearTimeout(hideTimer);
+    hideTimer = void 0;
+  };
+  const hide = () => {
+    cancelHide();
+    popup.removeClass("is-open");
+    button.removeClass("is-active");
+  };
+  const scheduleHide = () => {
+    cancelHide();
+    hideTimer = window.setTimeout(hide, 140);
+  };
+  const show = () => {
+    cancelHide();
+    popup.empty();
+    const suggestions = options.getSuggestions().slice(0, 3);
+    if (suggestions.length > 0) {
+      popup.createDiv({ cls: "obsidian-memos-tag-control__label", text: "\u5E38\u7528\u6807\u7B7E" });
+      for (const tag of suggestions) {
+        const item = popup.createEl("button", { text: tag, attr: { type: "button" } });
+        owner.registerDomEvent(item, "mousedown", (event) => event.preventDefault());
+        owner.registerDomEvent(item, "click", (event) => {
+          event.preventDefault();
+          event.stopPropagation();
+          hide();
+          options.onSelect(tag);
+        });
+      }
+      popup.addClass("is-open");
+    }
+    button.addClass("is-active");
+  };
+  owner.registerDomEvent(button, "click", (event) => {
+    event.stopPropagation();
+    if (options.onButtonClick) {
+      options.onButtonClick();
+      show();
+    } else {
+      options.onSelect("#");
+    }
+  });
+  owner.registerDomEvent(button, "mousedown", (event) => event.preventDefault());
+  if (!options.onButtonClick) {
+    owner.registerDomEvent(wrapper, "mouseenter", show);
+    owner.registerDomEvent(wrapper, "mouseleave", scheduleHide);
+    owner.registerDomEvent(popup, "mouseenter", cancelHide);
+    owner.registerDomEvent(popup, "mouseleave", scheduleHide);
+  }
+  owner.registerDomEvent(document, "pointerdown", (event) => {
+    const target = event.target instanceof Node ? event.target : null;
+    if (!target || !wrapper.contains(target)) hide();
+  });
+  return button;
+}
+
+// src/components/MemoComposer.ts
 var MemoComposer = class {
   constructor(owner, container, repository, onCreated, options = {}) {
     this.repository = repository;
@@ -2025,6 +2019,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     }
     this.contentEl.empty();
     this.contentEl.addClass("obsidian-memos-view");
+    this.containerEl.addClass("obsidian-memos-view-container");
     this.buildLayout();
     await this.refresh();
   }
@@ -2040,6 +2035,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.mobileTrashButton = void 0;
     this.mobileTrashToolbar = void 0;
     this.mobileDrawerButton = void 0;
+    this.containerEl.removeClass("obsidian-memos-view-container", "is-mobile");
     this.contentEl.empty();
   }
   async refresh(preferredPath) {
@@ -2349,12 +2345,12 @@ var MemosView = class extends import_obsidian11.ItemView {
   async createNotebook() {
     const name = await this.promptNotebookName("\u65B0\u5EFA\u5907\u5FD8\u5F55");
     if (!(name == null ? void 0 : name.trim())) return;
-    const isPrivate = window.confirm("\u662F\u5426\u521B\u5EFA\u4E3A\u79C1\u5BC6\u5907\u5FD8\u5F55\uFF1F");
+    const isPrivate = await confirmAction(this.app, "\u662F\u5426\u521B\u5EFA\u4E3A\u79C1\u5BC6\u5907\u5FD8\u5F55\uFF1F");
     let passwordHash;
     if (isPrivate) {
-      const password = window.prompt("\u8BBE\u7F6E\u8BBF\u95EE\u5BC6\u7801");
+      const password = await requestText(this.app, "\u8BBE\u7F6E\u8BBF\u95EE\u5BC6\u7801", "\u8BF7\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
       if (!password) return;
-      const confirmation = window.prompt("\u518D\u6B21\u8F93\u5165\u5BC6\u7801");
+      const confirmation = await requestText(this.app, "\u518D\u6B21\u8F93\u5165\u5BC6\u7801", "\u8BF7\u518D\u6B21\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
       if (confirmation !== password) {
         new import_obsidian11.Notice("\u4E24\u6B21\u8F93\u5165\u7684\u5BC6\u7801\u4E0D\u4E00\u81F4");
         return;
@@ -2395,7 +2391,7 @@ var MemosView = class extends import_obsidian11.ItemView {
   }
   async deleteNotebook(notebook) {
     if (this.plugin.settings.memoNotebooks.length <= 1) return;
-    if (!window.confirm(`\u5220\u9664\u201C${notebook.name}\u201D\uFF1F\u5176\u4E2D\u7684 Memo \u5C06\u79FB\u52A8\u5230\u9ED8\u8BA4\u5907\u5FD8\u5F55\u3002`)) return;
+    if (!await confirmAction(this.app, `\u5220\u9664\u201C${notebook.name}\u201D\uFF1F\u5176\u4E2D\u7684 Memo \u5C06\u79FB\u52A8\u5230\u9ED8\u8BA4\u5907\u5FD8\u5F55\u3002`)) return;
     const fallback = this.plugin.settings.memoNotebooks.find((item) => item.id !== notebook.id);
     if (!fallback) return;
     await this.plugin.repository.moveMemosToNotebook(notebook.id, fallback.id);
@@ -2414,9 +2410,9 @@ var MemosView = class extends import_obsidian11.ItemView {
   async selectNotebook(notebook) {
     if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
       if (!notebook.passwordHash) {
-        const password = window.prompt(`\u4E3A\u201C${notebook.name}\u201D\u8BBE\u7F6E\u5BC6\u7801`);
+        const password = await requestText(this.app, `\u4E3A\u201C${notebook.name}\u201D\u8BBE\u7F6E\u5BC6\u7801`, "\u8BF7\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
         if (!password) return;
-        const confirmation = window.prompt("\u518D\u6B21\u8F93\u5165\u5BC6\u7801");
+        const confirmation = await requestText(this.app, "\u518D\u6B21\u8F93\u5165\u5BC6\u7801", "\u8BF7\u518D\u6B21\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
         if (confirmation !== password) {
           new import_obsidian11.Notice("\u4E24\u6B21\u8F93\u5165\u7684\u5BC6\u7801\u4E0D\u4E00\u81F4");
           return;
@@ -2424,7 +2420,7 @@ var MemosView = class extends import_obsidian11.ItemView {
         notebook.passwordHash = await hashNotebookPassword(password);
         await this.plugin.saveSettings();
       } else {
-        const password = window.prompt(`\u8F93\u5165\u201C${notebook.name}\u201D\u7684\u5BC6\u7801`);
+        const password = await requestText(this.app, `\u8F93\u5165\u201C${notebook.name}\u201D\u7684\u5BC6\u7801`, "\u8BF7\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
         if (!password || await hashNotebookPassword(password) !== notebook.passwordHash) {
           new import_obsidian11.Notice("\u5BC6\u7801\u9519\u8BEF");
           return;
@@ -2447,7 +2443,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     await this.applyCurrentFilters();
   }
   async emptyTrash() {
-    if (!window.confirm("\u786E\u5B9A\u6C38\u4E45\u6E05\u7A7A\u5F53\u524D\u5907\u5FD8\u5F55\u7684\u56DE\u6536\u7AD9\u5417\uFF1F\u6B64\u64CD\u4F5C\u65E0\u6CD5\u64A4\u9500\u3002")) return;
+    if (!await confirmAction(this.app, "\u786E\u5B9A\u6C38\u4E45\u6E05\u7A7A\u5F53\u524D\u5907\u5FD8\u5F55\u7684\u56DE\u6536\u7AD9\u5417\uFF1F\u6B64\u64CD\u4F5C\u65E0\u6CD5\u64A4\u9500\u3002")) return;
     await this.plugin.repository.emptyTrash();
     await this.refresh();
   }
@@ -2785,6 +2781,7 @@ var MemosView = class extends import_obsidian11.ItemView {
     this.contentEl.toggleClass("is-list-right", this.plugin.settings.listPanePosition === "right");
     this.contentEl.toggleClass("is-list-collapsed", this.plugin.settings.listPaneCollapsed);
     this.contentEl.toggleClass("is-mobile", this.isMobileLayout());
+    this.containerEl.toggleClass("is-mobile", this.isMobileLayout());
     this.contentEl.toggleClass("is-mobile-detail", this.mobileDetail);
     this.contentEl.toggleClass("is-trash-mode", this.showTrash);
     (_a = this.mobileTrashToolbar) == null ? void 0 : _a.toggleClass("is-visible", this.showTrash);
@@ -2849,8 +2846,10 @@ var NotebookNameModal = class extends import_obsidian11.Modal {
   }
   onOpen() {
     this.titleEl.setText(this.heading);
-    const input = this.contentEl.createEl("input", { attr: { type: "text", placeholder: "\u5907\u5FD8\u5F55\u540D\u79F0", value: this.initial } });
-    input.style.width = "100%";
+    const input = this.contentEl.createEl("input", {
+      cls: "obsidian-memos-modal-input",
+      attr: { type: "text", placeholder: "\u5907\u5FD8\u5F55\u540D\u79F0", value: this.initial }
+    });
     const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
     const cancel = actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
     const confirm = actions.createEl("button", { text: "\u786E\u5B9A", cls: "mod-cta", attr: { type: "button" } });
@@ -2879,6 +2878,85 @@ var NotebookNameModal = class extends import_obsidian11.Modal {
     this.contentEl.empty();
   }
 };
+var ConfirmActionModal = class extends import_obsidian11.Modal {
+  constructor(app, message, resolveResult) {
+    super(app);
+    this.message = message;
+    this.resolveResult = resolveResult;
+    this.resolved = false;
+  }
+  onOpen() {
+    this.titleEl.setText("\u786E\u8BA4\u64CD\u4F5C");
+    this.contentEl.createEl("p", { text: this.message });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
+    const confirm = actions.createEl("button", { text: "\u786E\u5B9A", cls: "mod-cta", attr: { type: "button" } });
+    cancel.addEventListener("click", () => this.finish(false));
+    confirm.addEventListener("click", () => this.finish(true));
+    confirm.focus();
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveResult(false);
+  }
+  finish(confirmed) {
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveResult(confirmed);
+    this.close();
+  }
+};
+function confirmAction(app, message) {
+  return new Promise((resolve) => new ConfirmActionModal(app, message, resolve).open());
+}
+var TextInputModal = class extends import_obsidian11.Modal {
+  constructor(app, heading, placeholder, inputType, resolveValue) {
+    super(app);
+    this.heading = heading;
+    this.placeholder = placeholder;
+    this.inputType = inputType;
+    this.resolveValue = resolveValue;
+    this.resolved = false;
+  }
+  onOpen() {
+    this.titleEl.setText(this.heading);
+    const input = this.contentEl.createEl("input", {
+      cls: "obsidian-memos-modal-input",
+      attr: { type: this.inputType, placeholder: this.placeholder }
+    });
+    const actions = this.contentEl.createDiv({ cls: "modal-button-container" });
+    const cancel = actions.createEl("button", { text: "\u53D6\u6D88", attr: { type: "button" } });
+    const confirm = actions.createEl("button", { text: "\u786E\u5B9A", cls: "mod-cta", attr: { type: "button" } });
+    const submit = () => {
+      if (this.resolved) return;
+      this.resolved = true;
+      this.resolveValue(input.value);
+      this.close();
+    };
+    cancel.addEventListener("click", () => this.close());
+    confirm.addEventListener("click", submit);
+    input.addEventListener("keydown", (event) => {
+      if (event.key !== "Enter") return;
+      event.preventDefault();
+      submit();
+    });
+    window.setTimeout(() => {
+      input.focus();
+      input.select();
+    }, 0);
+  }
+  onClose() {
+    this.contentEl.empty();
+    if (this.resolved) return;
+    this.resolved = true;
+    this.resolveValue(null);
+  }
+};
+function requestText(app, heading, placeholder, inputType = "text") {
+  return new Promise((resolve) => new TextInputModal(app, heading, placeholder, inputType, resolve).open());
+}
 
 // src/main.ts
 var DEFAULT_SETTINGS = {

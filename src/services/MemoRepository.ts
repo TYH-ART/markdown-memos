@@ -137,7 +137,7 @@ export class MemoRepository {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {
       frontmatter.pinned = frontmatter.pinned !== true;
-    });
+    }, false);
     return this.readMemo(currentFile);
   }
 
@@ -346,13 +346,17 @@ export class MemoRepository {
     return currentFile;
   }
 
-  private async updateFrontmatter(file: TFile, update: (frontmatter: Record<string, unknown>) => void): Promise<void> {
+  private async updateFrontmatter(
+    file: TFile,
+    update: (frontmatter: Record<string, unknown>) => void,
+    updateModified = true,
+  ): Promise<void> {
     await this.app.fileManager.processFrontMatter(file, (rawFrontmatter: unknown) => {
       const frontmatter = rawFrontmatter && typeof rawFrontmatter === "object" && !Array.isArray(rawFrontmatter)
         ? rawFrontmatter as Record<string, unknown>
         : {};
       update(frontmatter);
-      frontmatter.modified = formatLocalIso(new Date());
+      if (updateModified) frontmatter.modified = formatLocalIso(new Date());
     });
   }
 
