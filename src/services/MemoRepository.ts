@@ -97,7 +97,7 @@ export class MemoRepository {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {
       frontmatter.trashedAt = formatLocalIso(new Date());
-    });
+    }, false);
     return this.readMemo(currentFile);
   }
 
@@ -105,7 +105,7 @@ export class MemoRepository {
     const currentFile = this.requireFile(file);
     await this.updateFrontmatter(currentFile, (frontmatter) => {
       frontmatter.trashedAt = null;
-    });
+    }, false);
     return this.readMemo(currentFile);
   }
 

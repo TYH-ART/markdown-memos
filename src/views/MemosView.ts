@@ -29,6 +29,7 @@ export class MemosView extends ItemView {
   private mobileTagButton?: HTMLButtonElement;
   private mobileNotebookList?: HTMLElement;
   private mobileTrashButton?: HTMLButtonElement;
+  private mobileSettingsButton?: HTMLButtonElement;
   private mobileTrashToolbar?: HTMLElement;
   private sortSelect?: HTMLSelectElement;
   private sortOption: MemoSort = "modified-desc";
@@ -84,6 +85,7 @@ export class MemosView extends ItemView {
     this.mobileTagButton = undefined;
     this.mobileNotebookList = undefined;
     this.mobileTrashButton = undefined;
+    this.mobileSettingsButton = undefined;
     this.mobileTrashToolbar = undefined;
     this.mobileDrawerButton = undefined;
     this.containerEl.removeClass("obsidian-memos-view-container", "is-mobile");
@@ -220,8 +222,15 @@ export class MemosView extends ItemView {
     });
     const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
     setIcon(trashIcon, "trash-2");
-    this.mobileTrashButton.createSpan({ text: "回收站" });
+    this.mobileTrashButton.setAttr("aria-label", "回收站");
+    this.mobileTrashButton.setAttr("title", "回收站");
     this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
+    this.mobileSettingsButton = mobileLibrary.createEl("button", {
+      cls: "obsidian-memos-mobile-library__settings clickable-icon",
+      attr: { type: "button", "aria-label": "Markdown Memos 设置", title: "Markdown Memos 设置" },
+    });
+    setIcon(this.mobileSettingsButton, "settings");
+    this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
     this.renderMobileLibrary();
     const listHeader = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__header" });
     const listTopButton = listHeader.createEl("button", {
@@ -274,7 +283,6 @@ export class MemosView extends ItemView {
       attr: { type: "button", "aria-label": "返回主界面", title: "返回主界面" },
     });
     setIcon(backFromTrash, "arrow-left");
-    this.mobileTrashToolbar.createEl("strong", { text: "回收站" });
     const emptyTrashButton = this.mobileTrashToolbar.createEl("button", { text: "清空回收站", attr: { type: "button" } });
     this.registerDomEvent(backFromTrash, "click", () => {
       this.showTrash = false;
@@ -515,6 +523,18 @@ export class MemosView extends ItemView {
     await this.applyCurrentFilters();
   }
 
+  private openPluginSettings(): void {
+    const setting = (this.app as unknown as {
+      setting?: { open?: () => void; openTabById?: (id: string) => void };
+    }).setting;
+    if (!setting?.open) {
+      new Notice("无法打开设置");
+      return;
+    }
+    setting.open();
+    window.setTimeout(() => setting.openTabById?.("markdown-memos"), 0);
+  }
+
   private async emptyTrash(): Promise<void> {
     if (!await confirmAction(this.app, "确定永久清空当前备忘录的回收站吗？此操作无法撤销。")) return;
     await this.plugin.repository.emptyTrash();
@@ -541,14 +561,27 @@ export class MemosView extends ItemView {
       const item = host.createDiv({ cls: `obsidian-memos-feed-item${memo.file.path === this.selectedPath ? " is-selected" : ""}` });
       item.dataset.memoPath = memo.file.path;
       if (this.showTrash) {
+        const trashActions = item.createDiv({ cls: "obsidian-memos-trash-actions" });
         const restoreButton = item.createEl("button", {
-          cls: "obsidian-memos-mobile-restore",
+          cls: "clickable-icon obsidian-memos-trash-action obsidian-memos-trash-restore",
           attr: { type: "button", "aria-label": "还原 Memo", title: "还原 Memo" },
         });
         setIcon(restoreButton, "rotate-ccw");
         this.registerDomEvent(restoreButton, "click", async (event: MouseEvent) => {
           event.stopPropagation();
           await this.plugin.repository.restoreMemo(memo.file);
+          await this.refresh();
+        });
+        trashActions.appendChild(restoreButton);
+        const deleteButton = trashActions.createEl("button", {
+          cls: "clickable-icon obsidian-memos-trash-action obsidian-memos-trash-permanent-delete",
+          attr: { type: "button", "aria-label": "永久删除 Memo", title: "永久删除 Memo" },
+        });
+        setIcon(deleteButton, "brush");
+        this.registerDomEvent(deleteButton, "click", async (event: MouseEvent) => {
+          event.stopPropagation();
+          if (!await confirmAction(this.app, "确定永久删除这个 Memo 吗？此操作无法撤销。")) return;
+          await this.plugin.repository.deleteMemo(memo.file);
           await this.refresh();
         });
       }
@@ -686,6 +719,7 @@ export class MemosView extends ItemView {
   private getTagFrequency(): Map<string, number> {
     const frequency = new Map<string, number>();
     for (const memo of this.allMemos) {
+      if (memo.trashedAt) continue;
       const occurrences = extractMemoTagOccurrences(memo.content);
       for (const tag of occurrences) frequency.set(tag, (frequency.get(tag) ?? 0) + 1);
       for (const tag of memo.tags) {
@@ -696,6 +730,8 @@ export class MemosView extends ItemView {
   }
 
   private getPopularTags(limit: number): string[] {
+    const configured = this.plugin.settings.composerTags.filter(Boolean);
+    if (configured.length > 0) return configured.slice(0, limit);
     const frequency = this.getTagFrequency();
     return Array.from(frequency.keys())
       .sort((left, right) => (frequency.get(right) ?? 0) - (frequency.get(left) ?? 0) || left.localeCompare(right))
@@ -779,8 +815,7 @@ export class MemosView extends ItemView {
     const mobile = this.isMobileLayout();
     if (!mobile && !(await confirmMemoDeletion(this.app, memo))) return;
     try {
-      if (mobile) await this.plugin.repository.trashMemo(memo.file);
-      else await this.plugin.repository.deleteMemo(memo.file);
+      await this.plugin.repository.trashMemo(memo.file);
       if (keepMobileListOpen && mobile) {
         this.mobileDetail = false;
       }

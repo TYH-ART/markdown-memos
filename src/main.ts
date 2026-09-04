@@ -20,6 +20,7 @@ const DEFAULT_SETTINGS: ObsidianMemosSettings = {
     { id: "private", name: "私密备忘录", private: true },
   ],
   activeMemoNotebookId: "default",
+  composerTags: [],
 };
 
 export default class ObsidianMemosPlugin extends Plugin {
@@ -122,6 +123,7 @@ export default class ObsidianMemosPlugin extends Plugin {
       activeMemoNotebookId: typeof saved?.activeMemoNotebookId === "string" && saved.activeMemoNotebookId
         ? saved.activeMemoNotebookId
         : "default",
+      composerTags: normalizeComposerTags(saved?.composerTags),
     };
     if (!this.settings.memoNotebooks.some((notebook) => notebook.id === this.settings.activeMemoNotebookId)) {
       this.settings.activeMemoNotebookId = this.settings.memoNotebooks[0]?.id ?? "default";
@@ -141,6 +143,11 @@ export default class ObsidianMemosPlugin extends Plugin {
   private isRelevantPath(path: string): boolean {
     return isPathInsideFolder(path, this.settings.memoFolder);
   }
+}
+
+function normalizeComposerTags(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return value.slice(0, 3).map((item) => typeof item === "string" ? item.trim() : "").filter(Boolean);
 }
 
 function normalizeNotebooks(value: unknown): ObsidianMemosSettings["memoNotebooks"] {

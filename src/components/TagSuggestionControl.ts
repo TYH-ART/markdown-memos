@@ -39,7 +39,6 @@ export function createTagSuggestionControl(
     popup.empty();
     const suggestions = options.getSuggestions().slice(0, 3);
     if (suggestions.length > 0) {
-      popup.createDiv({ cls: "obsidian-memos-tag-control__label", text: "常用标签" });
       for (const tag of suggestions) {
         const item = popup.createEl("button", { text: tag, attr: { type: "button" } });
         owner.registerDomEvent(item, "mousedown", (event: MouseEvent) => event.preventDefault());
@@ -58,8 +57,13 @@ export function createTagSuggestionControl(
   owner.registerDomEvent(button, "click", (event: MouseEvent) => {
     event.stopPropagation();
     if (options.onButtonClick) {
-      options.onButtonClick();
-      show();
+      if (button.hasClass("is-active")) {
+        hide();
+        options.onSelect("#");
+      } else {
+        options.onButtonClick();
+        show();
+      }
     } else {
       options.onSelect("#");
     }

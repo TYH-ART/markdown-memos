@@ -61,7 +61,7 @@ export class MemoComposer {
     this.textarea = bodyField.createEl("textarea", {
       cls: "obsidian-memos-composer__input",
       attr: {
-        placeholder: this.isMobileLayout() ? "你现在在想什么？" : "",
+        placeholder: "你现在在想什么？",
         rows: "5",
         "aria-label": "Memo 内容",
       },
@@ -139,8 +139,11 @@ export class MemoComposer {
     owner.registerDomEvent(this.titleInput, "keydown", (event: KeyboardEvent) => {
       submitFromKeyboard(event);
       if (event.defaultPrevented) return;
+      // Let IME composition finish in the title field before moving focus.
+      if (event.isComposing) return;
       if (event.key === "Enter" || event.key === "ArrowDown") {
         event.preventDefault();
+        event.stopPropagation();
         this.textarea.focus();
         this.textarea.setSelectionRange(0, 0);
       }
@@ -151,6 +154,7 @@ export class MemoComposer {
       const caret = this.textarea.selectionStart ?? 0;
       if (caret > 0 && this.textarea.value.slice(0, caret).includes("\n")) return;
       event.preventDefault();
+      event.stopPropagation();
       this.titleInput.focus();
       this.titleInput.setSelectionRange(this.titleInput.value.length, this.titleInput.value.length);
     });

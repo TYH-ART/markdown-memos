@@ -11,6 +11,7 @@ export interface ObsidianMemosSettings {
   selectedTag: string | null;
   memoNotebooks: MemoNotebook[];
   activeMemoNotebookId: string;
+  composerTags: string[];
 }
 
 export interface MemoNotebook {

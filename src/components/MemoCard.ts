@@ -469,7 +469,7 @@ export class MemoCard {
 
   private async deleteImmediately(): Promise<void> {
     try {
-      await this.repository.deleteMemo(this.memo.file);
+      await this.repository.trashMemo(this.memo.file);
       await this.options.onChanged();
     } catch (error) {
       console.error(`[Markdown Memos] 删除失败：${this.memo.file.path}`, error);

@@ -100,6 +100,11 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
           });
         },
       },
+      {
+        name: "输入区标签",
+        desc: "设置输入区标签栏的三个标签及其顺序。留空时继续使用 Memo 中已有的常用标签。",
+        render: (setting) => renderComposerTagControls(setting.controlEl, this.plugin),
+      },
     ];
   }
 
@@ -184,9 +189,61 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
           });
       });
 
+    new Setting(this.containerEl)
+      .setName("输入区标签")
+      .setDesc("设置输入区标签栏的三个标签及其顺序。留空时继续使用 Memo 中已有的常用标签。");
+    renderComposerTagControls(this.containerEl, this.plugin);
+
     this.containerEl.createEl("p", {
       cls: "setting-item-description",
       text: `当前读取目录：${this.plugin.repository.folder}`,
     });
   }
+}
+
+function renderComposerTagControls(container: HTMLElement, plugin: ObsidianMemosPlugin): void {
+  const host = container.createDiv({ cls: "obsidian-memos-composer-tag-settings" });
+  const values = Array.from({ length: 3 }, (_, index) => plugin.settings.composerTags[index] ?? "");
+
+  const save = async (): Promise<void> => {
+    plugin.settings.composerTags = values.map(normalizeComposerTag).filter(Boolean);
+    await plugin.saveSettings();
+    plugin.scheduleViewRefresh();
+  };
+
+  const render = (): void => {
+    host.empty();
+    values.forEach((value, index) => {
+      const row = host.createDiv({ cls: "obsidian-memos-composer-tag-settings__row" });
+      const input = row.createEl("input", {
+        attr: { type: "text", value, placeholder: `标签 ${index + 1}（例如 #工作）`, "aria-label": `输入区标签 ${index + 1}` },
+      });
+      input.addEventListener("change", () => {
+        values[index] = normalizeComposerTag(input.value);
+        void save();
+      });
+      const up = row.createEl("button", { text: "↑", attr: { type: "button", "aria-label": "上移" } });
+      up.disabled = index === 0;
+      up.addEventListener("click", () => {
+        if (index === 0) return;
+        [values[index - 1], values[index]] = [values[index], values[index - 1]];
+        void save().then(render);
+      });
+      const down = row.createEl("button", { text: "↓", attr: { type: "button", "aria-label": "下移" } });
+      down.disabled = index === values.length - 1;
+      down.addEventListener("click", () => {
+        if (index === values.length - 1) return;
+        [values[index], values[index + 1]] = [values[index + 1], values[index]];
+        void save().then(render);
+      });
+    });
+  };
+
+  render();
+}
+
+function normalizeComposerTag(value: string): string {
+  const trimmed = value.trim();
+  if (!trimmed) return "";
+  return trimmed.startsWith("#") ? trimmed : `#${trimmed}`;
 }
