@@ -1003,6 +1003,10 @@
   margin: 0 auto;
 }
 
+.obsidian-memos-detail-feed {
+  display: contents;
+}
+
 .obsidian-memos-feed-item {
   scroll-margin-top: 12px;
   border-radius: var(--radius-l);
@@ -1400,7 +1404,7 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   overflow: visible;
   padding: 0
     max(10px, env(safe-area-inset-right))
-    max(36px, env(safe-area-inset-bottom))
+    max(84px, calc(env(safe-area-inset-bottom) + 52px))
     max(10px, env(safe-area-inset-left));
 }
 
@@ -1510,34 +1514,33 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 }
 
 .is-mobile .obsidian-memos-mobile-drawer-button.is-visible {
-  position: fixed;
+  position: absolute;
   z-index: 30;
-  top: 50%;
-  left: 0;
-  display: inline-flex;
+  top: 0;
+  bottom: 0;
+  left: calc(0px - max(10px, env(safe-area-inset-left)));
+  display: block;
   width: 30px;
-  height: 44px;
-  align-items: center;
-  justify-content: center;
+  height: auto;
+  min-height: 0;
   padding: 0;
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--text-muted);
+  color: transparent;
   box-shadow: none;
-  transform: translateY(-50%);
+  touch-action: manipulation;
 }
 
 .is-mobile .obsidian-memos-mobile-drawer-button.is-visible:hover,
 .is-mobile .obsidian-memos-mobile-drawer-button.is-visible:focus-visible {
   background: transparent;
-  color: var(--text-accent);
+  color: transparent;
   box-shadow: none;
 }
 
 .is-mobile .obsidian-memos-mobile-drawer-button.is-visible > svg {
-  width: 19px;
-  height: 19px;
+  display: none;
 }
 
 .is-mobile .obsidian-memos-composer__field.is-title {
@@ -1668,7 +1671,8 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  padding: 0;
+  box-sizing: border-box;
+  padding: 0 0 88px;
 }
 
 .is-mobile .obsidian-memos-mobile-library__upper {
@@ -1860,12 +1864,28 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   color: var(--text-muted);
 }
 
+.is-mobile .obsidian-memos-mobile-library__settings {
+  position: fixed;
+  z-index: 31;
+  bottom: 44px;
+  left: 0;
+  margin-bottom: 0;
+  margin-left: 0;
+}
+
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:hover,
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:focus-visible,
 .is-mobile .obsidian-memos-mobile-library__settings:hover,
 .is-mobile .obsidian-memos-mobile-library__settings:focus-visible {
   background: var(--background-modifier-hover);
   color: var(--text-normal);
+}
+
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:hover,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:focus,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:active {
+  background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-secondary));
+  color: var(--text-accent);
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash,
@@ -1885,6 +1905,17 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .is-mobile .obsidian-memos-mobile-library__trash.is-active {
   background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-secondary));
   color: var(--text-accent);
+}
+
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash.is-active,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash:hover,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash:focus,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__trash:active,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:hover,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:focus,
+.obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings:active {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
 
 .obsidian-memos-view.is-trash-mode .obsidian-memos-card__toolbar {
@@ -2057,6 +2088,14 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .is-mobile .obsidian-memos-detail-card-host,
 .is-mobile .obsidian-memos-composer-host {
   width: 100%;
+}
+
+.is-mobile .obsidian-memos-detail-feed {
+  position: relative;
+  display: flex;
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow: hidden;
 }
 
 .is-mobile .obsidian-memos-composer-host {

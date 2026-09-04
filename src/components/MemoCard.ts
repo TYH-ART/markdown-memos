@@ -185,7 +185,7 @@ export class MemoCard {
     }
     this.renderDetectedLinks(this.display, this.memo.content);
 
-    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), this.options.isMobileLayout?.() === true).render(
       this.display,
       this.memo.attachments,
     );
@@ -259,7 +259,7 @@ export class MemoCard {
     // Keep mobile attachments available while editing so images/files can still
     // be opened without leaving the editor. Desktop keeps its existing editor
     // layout unchanged.
-    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), this.options.isMobileLayout?.() === true).render(
       this.display,
       this.memo.attachments,
     );

@@ -31,7 +31,7 @@ export class MemoRepository {
   }
 
   private async createMemoInternal(rawContent: string, options: CreateMemoOptions): Promise<MemoRecord> {
-    if (!rawContent.trim()) {
+    if (!rawContent.trim() && !options.allowEmpty) {
       throw new Error("Memo 内容不能为空");
     }
     const content = rawContent;

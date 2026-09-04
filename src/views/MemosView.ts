@@ -116,15 +116,6 @@ export class MemosView extends ItemView {
 
   private buildLayout(): void {
     const page = this.contentEl.createDiv({ cls: "obsidian-memos-page" });
-    this.mobileDrawerButton = page.createEl("button", {
-      cls: "clickable-icon obsidian-memos-mobile-drawer-button",
-      attr: { type: "button", "aria-label": "展开备忘录侧边栏", title: "展开备忘录侧边栏" },
-    });
-    setIcon(this.mobileDrawerButton, "chevron-right");
-    this.registerDomEvent(this.mobileDrawerButton, "click", () => {
-      this.mobileDetail = false;
-      this.updateLayoutState();
-    });
     const toolbar = page.createDiv({ cls: "obsidian-memos-toolbar" });
     const sidebarButton = toolbar.createEl("button", {
       cls: "clickable-icon obsidian-memos-toolbar__icon",
@@ -223,11 +214,10 @@ export class MemosView extends ItemView {
     const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
     setIcon(trashIcon, "trash-2");
     this.mobileTrashButton.setAttr("aria-label", "回收站");
-    this.mobileTrashButton.setAttr("title", "回收站");
     this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
     this.mobileSettingsButton = mobileLibrary.createEl("button", {
       cls: "obsidian-memos-mobile-library__settings clickable-icon",
-      attr: { type: "button", "aria-label": "Markdown Memos 设置", title: "Markdown Memos 设置" },
+      attr: { type: "button", "aria-label": "Markdown Memos 设置" },
     });
     setIcon(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
@@ -308,7 +298,16 @@ export class MemosView extends ItemView {
         getNotebookId: () => this.isMobileLayout() ? this.plugin.settings.activeMemoNotebookId : undefined,
       },
     );
-    this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-card-host" });
+    const detailFeed = this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-feed" });
+    this.mobileDrawerButton = detailFeed.createEl("button", {
+      cls: "obsidian-memos-mobile-drawer-button",
+      attr: { type: "button", "aria-label": "展开备忘录侧边栏", title: "展开备忘录侧边栏" },
+    });
+    this.registerDomEvent(this.mobileDrawerButton, "click", () => {
+      this.mobileDetail = false;
+      this.updateLayoutState();
+    });
+    detailFeed.createDiv({ cls: "obsidian-memos-detail-card-host" });
 
     this.registerDomEvent(this.contentEl, "keydown", (event: KeyboardEvent) => this.handleKeyboard(event));
     this.registerDomEvent(window, "resize", () => this.updateLayoutState());
@@ -590,6 +589,9 @@ export class MemosView extends ItemView {
         attachmentService: this.plugin.attachmentService,
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : undefined;
+          if (editing) {
+            window.requestAnimationFrame(() => this.scrollMemoToTop(memo.file.path));
+          }
         },
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
@@ -890,6 +892,21 @@ export class MemosView extends ItemView {
     if (!selected || !host) return;
     const top = Math.max(0, selected.offsetTop - host.offsetTop);
     host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+  }
+
+  private scrollMemoToTop(path: string): void {
+    const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
+    const item = Array.from(host?.querySelectorAll<HTMLElement>(".obsidian-memos-feed-item") ?? [])
+      .find((candidate) => candidate.dataset.memoPath === path);
+    if (!host || !item) return;
+    const top = Math.max(0, item.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop);
+    const remainingContent = host.scrollHeight - top;
+    const extraSpace = Math.max(0, host.clientHeight - remainingContent);
+    if (extraSpace > 0) {
+      const currentPadding = Number.parseFloat(window.getComputedStyle(host).paddingBottom) || 0;
+      host.style.paddingBottom = `${currentPadding + extraSpace}px`;
+    }
+    host.scrollTo({ top, behavior: "smooth" });
   }
 
   private async toggleListPane(): Promise<void> {

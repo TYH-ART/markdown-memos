@@ -118,7 +118,7 @@ var MemoRepository = class {
   }
   async createMemoInternal(rawContent, options) {
     var _a, _b;
-    if (!rawContent.trim()) {
+    if (!rawContent.trim() && !options.allowEmpty) {
       throw new Error("Memo \u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A");
     }
     const content = rawContent;
@@ -852,10 +852,11 @@ var import_obsidian7 = require("obsidian");
 // src/components/MemoAttachmentList.ts
 var import_obsidian5 = require("obsidian");
 var MemoAttachmentList = class {
-  constructor(owner, attachmentService, onRemove) {
+  constructor(owner, attachmentService, onRemove, enableVideoThumbnails = false) {
     this.owner = owner;
     this.attachmentService = attachmentService;
     this.onRemove = onRemove;
+    this.enableVideoThumbnails = enableVideoThumbnails;
   }
   render(container, attachments) {
     if (attachments.length === 0) {
@@ -877,7 +878,11 @@ var MemoAttachmentList = class {
     if (attachment.mime.startsWith("image/") && url) {
       item.createEl("img", { cls: "obsidian-memos-attachment__image", attr: { src: url, alt: attachment.name } });
     } else if (attachment.mime.startsWith("video/") && url) {
-      item.createEl("video", { cls: "obsidian-memos-attachment__media", attr: { src: url, preload: "metadata" } });
+      const video = item.createEl("video", {
+        cls: "obsidian-memos-attachment__media",
+        attr: { src: url, preload: "auto", muted: "true", playsinline: "true" }
+      });
+      if (this.enableVideoThumbnails) prepareVideoThumbnail(video);
     } else {
       const fileCard = item.createDiv({ cls: "obsidian-memos-attachment__file" });
       fileCard.createSpan({ cls: "obsidian-memos-attachment__file-icon", text: attachment.mime.startsWith("audio/") ? "\u{1F3B5}" : "\u{1F4C4}" });
@@ -902,6 +907,29 @@ var MemoAttachmentList = class {
     });
   }
 };
+function prepareVideoThumbnail(video) {
+  const capture = () => {
+    if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      video.poster = canvas.toDataURL("image/jpeg", 0.82);
+    } catch (e) {
+    }
+  };
+  video.addEventListener("loadeddata", () => {
+    if (video.duration > 0) {
+      video.currentTime = Math.min(0.1, video.duration / 2);
+    } else {
+      capture();
+    }
+  }, { once: true });
+  video.addEventListener("seeked", capture, { once: true });
+}
 function formatFileSize(size) {
   if (size === void 0) return "\u6587\u4EF6";
   if (size < 1024) return `${size} B`;
@@ -1092,6 +1120,7 @@ var MemoCard = class {
     menu.showAtMouseEvent(event);
   }
   async renderDisplay() {
+    var _a, _b;
     this.unloadMarkdownChild();
     this.display.empty();
     this.article.removeClass("is-editing");
@@ -1118,13 +1147,13 @@ var MemoCard = class {
       }
     }
     this.renderDetectedLinks(this.display, this.memo.content);
-    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), ((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a)) === true).render(
       this.display,
       this.memo.attachments
     );
   }
   async startEditing(tagToInsert) {
-    var _a, _b;
+    var _a, _b, _c, _d;
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
@@ -1193,7 +1222,7 @@ var MemoCard = class {
       }, 0);
     });
     this.renderDetectedLinks(links, this.memo.content);
-    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment)).render(
+    new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) === true).render(
       this.display,
       this.memo.attachments
     );
@@ -1579,6 +1608,14 @@ var MemoComposer = class {
         composer.removeClass("is-mobile-expanded");
       }
     });
+    owner.registerDomEvent(composer, "paste", (event) => {
+      var _a2, _b2;
+      if (this.isMobileLayout()) return;
+      const files = Array.from((_b2 = (_a2 = event.clipboardData) == null ? void 0 : _a2.items) != null ? _b2 : []).filter((item) => item.kind === "file" && item.type.startsWith("image/")).map((item) => item.getAsFile()).filter((file) => file !== null);
+      if (files.length === 0) return;
+      event.preventDefault();
+      this.addPendingExternalFiles(files);
+    });
     owner.registerDomEvent(this.titleInput, "contextmenu", (event) => openTextEditingMenu(this.titleInput, event));
     owner.registerDomEvent(this.textarea, "contextmenu", (event) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
@@ -1631,14 +1668,15 @@ var MemoComposer = class {
   async submit() {
     const title = this.titleInput.value;
     const content = joinMemoContent(title, this.textarea.value);
-    if (!content.trim() || this.submitting) {
+    if (!content.trim() && this.pendingAttachments.length === 0 || this.submitting) {
       return;
     }
     this.setSubmitting(true);
     try {
       let memo = await this.repository.createMemo(content, {
         type: this.memoType,
-        notebookId: this.getNotebookId()
+        notebookId: this.getNotebookId(),
+        allowEmpty: this.pendingAttachments.length > 0
       });
       await this.persistPendingAttachments(memo);
       memo = await this.repository.getMemo(memo.file);
@@ -1670,7 +1708,7 @@ var MemoComposer = class {
     this.updateButtonState();
   }
   updateButtonState() {
-    this.submitButton.disabled = this.submitting || !this.titleInput.value.trim() && !this.textarea.value.trim();
+    this.submitButton.disabled = this.submitting || !this.titleInput.value.trim() && !this.textarea.value.trim() && this.pendingAttachments.length === 0;
   }
   expandMobileComposer() {
     this.composerEl.addClass("is-mobile-expanded");
@@ -1704,17 +1742,22 @@ var MemoComposer = class {
   async queueExternalAttachments() {
     if (!this.attachmentService) return;
     const files = await this.attachmentService.pickExternalAttachments(this.isMobileLayout() ? "image/*,video/*" : "*/*");
+    this.addPendingExternalFiles(files);
+  }
+  addPendingExternalFiles(files) {
     for (const file of files) {
+      const mime = file.type || inferMime(file.name);
       this.pendingAttachments.push({
         kind: "external",
         file,
         name: file.name,
-        mime: file.type || inferMime(file.name),
+        mime,
         size: file.size,
-        previewUrl: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : void 0
+        previewUrl: mime.startsWith("image/") || mime.startsWith("video/") ? URL.createObjectURL(file) : void 0
       });
     }
     this.renderPendingAttachments();
+    this.updateButtonState();
   }
   async queueVaultAttachment() {
     if (!this.attachmentService) return;
@@ -1733,7 +1776,8 @@ var MemoComposer = class {
       if (attachment.mime.startsWith("image/") && url) {
         item.createEl("img", { attr: { src: url, alt: attachment.name } });
       } else if (attachment.mime.startsWith("video/") && url) {
-        item.createEl("video", { attr: { src: url, preload: "metadata" } });
+        const video = item.createEl("video", { attr: { src: url, preload: "auto", muted: "true", playsinline: "true" } });
+        if (this.isMobileLayout()) prepareVideoThumbnail(video);
       } else {
         item.createSpan({ cls: "obsidian-memos-composer__attachment-icon", text: attachment.mime.startsWith("audio/") ? "\u{1F3B5}" : "\u{1F4C4}" });
       }
@@ -2120,15 +2164,6 @@ var MemosView = class extends import_obsidian11.ItemView {
   }
   buildLayout() {
     const page = this.contentEl.createDiv({ cls: "obsidian-memos-page" });
-    this.mobileDrawerButton = page.createEl("button", {
-      cls: "clickable-icon obsidian-memos-mobile-drawer-button",
-      attr: { type: "button", "aria-label": "\u5C55\u5F00\u5907\u5FD8\u5F55\u4FA7\u8FB9\u680F", title: "\u5C55\u5F00\u5907\u5FD8\u5F55\u4FA7\u8FB9\u680F" }
-    });
-    (0, import_obsidian11.setIcon)(this.mobileDrawerButton, "chevron-right");
-    this.registerDomEvent(this.mobileDrawerButton, "click", () => {
-      this.mobileDetail = false;
-      this.updateLayoutState();
-    });
     const toolbar = page.createDiv({ cls: "obsidian-memos-toolbar" });
     const sidebarButton = toolbar.createEl("button", {
       cls: "clickable-icon obsidian-memos-toolbar__icon",
@@ -2223,11 +2258,10 @@ var MemosView = class extends import_obsidian11.ItemView {
     const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
     (0, import_obsidian11.setIcon)(trashIcon, "trash-2");
     this.mobileTrashButton.setAttr("aria-label", "\u56DE\u6536\u7AD9");
-    this.mobileTrashButton.setAttr("title", "\u56DE\u6536\u7AD9");
     this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
     this.mobileSettingsButton = mobileLibrary.createEl("button", {
       cls: "obsidian-memos-mobile-library__settings clickable-icon",
-      attr: { type: "button", "aria-label": "Markdown Memos \u8BBE\u7F6E", title: "Markdown Memos \u8BBE\u7F6E" }
+      attr: { type: "button", "aria-label": "Markdown Memos \u8BBE\u7F6E" }
     });
     (0, import_obsidian11.setIcon)(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
@@ -2306,7 +2340,16 @@ var MemosView = class extends import_obsidian11.ItemView {
         getNotebookId: () => this.isMobileLayout() ? this.plugin.settings.activeMemoNotebookId : void 0
       }
     );
-    this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-card-host" });
+    const detailFeed = this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-feed" });
+    this.mobileDrawerButton = detailFeed.createEl("button", {
+      cls: "obsidian-memos-mobile-drawer-button",
+      attr: { type: "button", "aria-label": "\u5C55\u5F00\u5907\u5FD8\u5F55\u4FA7\u8FB9\u680F", title: "\u5C55\u5F00\u5907\u5FD8\u5F55\u4FA7\u8FB9\u680F" }
+    });
+    this.registerDomEvent(this.mobileDrawerButton, "click", () => {
+      this.mobileDetail = false;
+      this.updateLayoutState();
+    });
+    detailFeed.createDiv({ cls: "obsidian-memos-detail-card-host" });
     this.registerDomEvent(this.contentEl, "keydown", (event) => this.handleKeyboard(event));
     this.registerDomEvent(window, "resize", () => this.updateLayoutState());
     this.registerDomEvent(window, "pointermove", (event) => {
@@ -2573,6 +2616,9 @@ var MemosView = class extends import_obsidian11.ItemView {
         attachmentService: this.plugin.attachmentService,
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : void 0;
+          if (editing) {
+            window.requestAnimationFrame(() => this.scrollMemoToTop(memo.file.path));
+          }
         },
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
@@ -2855,6 +2901,20 @@ var MemosView = class extends import_obsidian11.ItemView {
     if (!selected || !host) return;
     const top = Math.max(0, selected.offsetTop - host.offsetTop);
     host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
+  }
+  scrollMemoToTop(path) {
+    var _a, _b;
+    const host = (_a = this.detailContentEl) == null ? void 0 : _a.querySelector(".obsidian-memos-detail-card-host");
+    const item = Array.from((_b = host == null ? void 0 : host.querySelectorAll(".obsidian-memos-feed-item")) != null ? _b : []).find((candidate) => candidate.dataset.memoPath === path);
+    if (!host || !item) return;
+    const top = Math.max(0, item.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop);
+    const remainingContent = host.scrollHeight - top;
+    const extraSpace = Math.max(0, host.clientHeight - remainingContent);
+    if (extraSpace > 0) {
+      const currentPadding = Number.parseFloat(window.getComputedStyle(host).paddingBottom) || 0;
+      host.style.paddingBottom = `${currentPadding + extraSpace}px`;
+    }
+    host.scrollTo({ top, behavior: "smooth" });
   }
   async toggleListPane() {
     if (this.isMobileLayout()) {

@@ -5,6 +5,7 @@ import { inferMime } from "../services/AttachmentService";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoRecord, MemoType } from "../types";
 import { errorMessage, joinMemoContent } from "../utils";
+import { prepareVideoThumbnail } from "./MemoAttachmentList";
 import { createTagSuggestionControl } from "./TagSuggestionControl";
 import { openTextEditingMenu } from "./TextEditingMenu";
 
@@ -118,6 +119,16 @@ export class MemoComposer {
         composer.removeClass("is-mobile-expanded");
       }
     });
+    owner.registerDomEvent(composer, "paste", (event: ClipboardEvent) => {
+      if (this.isMobileLayout()) return;
+      const files = Array.from(event.clipboardData?.items ?? [])
+        .filter((item) => item.kind === "file" && item.type.startsWith("image/"))
+        .map((item) => item.getAsFile())
+        .filter((file): file is File => file !== null);
+      if (files.length === 0) return;
+      event.preventDefault();
+      this.addPendingExternalFiles(files);
+    });
     owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event));
     owner.registerDomEvent(this.textarea, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
@@ -172,7 +183,7 @@ export class MemoComposer {
   private async submit(): Promise<void> {
     const title = this.titleInput.value;
     const content = joinMemoContent(title, this.textarea.value);
-    if (!content.trim() || this.submitting) {
+    if ((!content.trim() && this.pendingAttachments.length === 0) || this.submitting) {
       return;
     }
 
@@ -181,6 +192,7 @@ export class MemoComposer {
       let memo = await this.repository.createMemo(content, {
         type: this.memoType,
         notebookId: this.getNotebookId(),
+        allowEmpty: this.pendingAttachments.length > 0,
       });
       await this.persistPendingAttachments(memo);
       memo = await this.repository.getMemo(memo.file);
@@ -214,7 +226,7 @@ export class MemoComposer {
   }
 
   private updateButtonState(): void {
-    this.submitButton.disabled = this.submitting || (!this.titleInput.value.trim() && !this.textarea.value.trim());
+    this.submitButton.disabled = this.submitting || (!this.titleInput.value.trim() && !this.textarea.value.trim() && this.pendingAttachments.length === 0);
   }
 
   private expandMobileComposer(): void {
@@ -253,17 +265,23 @@ export class MemoComposer {
   private async queueExternalAttachments(): Promise<void> {
     if (!this.attachmentService) return;
     const files = await this.attachmentService.pickExternalAttachments(this.isMobileLayout() ? "image/*,video/*" : "*/*");
+    this.addPendingExternalFiles(files);
+  }
+
+  private addPendingExternalFiles(files: File[]): void {
     for (const file of files) {
+      const mime = file.type || inferMime(file.name);
       this.pendingAttachments.push({
         kind: "external",
         file,
         name: file.name,
-        mime: file.type || inferMime(file.name),
+        mime,
         size: file.size,
-        previewUrl: file.type.startsWith("image/") || file.type.startsWith("video/") ? URL.createObjectURL(file) : undefined,
+        previewUrl: mime.startsWith("image/") || mime.startsWith("video/") ? URL.createObjectURL(file) : undefined,
       });
     }
     this.renderPendingAttachments();
+    this.updateButtonState();
   }
 
   private async queueVaultAttachment(): Promise<void> {
@@ -285,7 +303,8 @@ export class MemoComposer {
       if (attachment.mime.startsWith("image/") && url) {
         item.createEl("img", { attr: { src: url, alt: attachment.name } });
       } else if (attachment.mime.startsWith("video/") && url) {
-        item.createEl("video", { attr: { src: url, preload: "metadata" } });
+        const video = item.createEl("video", { attr: { src: url, preload: "auto", muted: "true", playsinline: "true" } });
+        if (this.isMobileLayout()) prepareVideoThumbnail(video);
       } else {
         item.createSpan({ cls: "obsidian-memos-composer__attachment-icon", text: attachment.mime.startsWith("audio/") ? "🎵" : "📄" });
       }

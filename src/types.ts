@@ -37,6 +37,7 @@ export interface MemoAttachment {
 export interface CreateMemoOptions {
   type?: MemoType;
   notebookId?: string;
+  allowEmpty?: boolean;
 }
 
 export interface MemoFrontmatter {

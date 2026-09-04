@@ -8,6 +8,7 @@ export class MemoAttachmentList {
     private readonly owner: Component,
     private readonly attachmentService: AttachmentService,
     private readonly onRemove: (attachment: MemoAttachment) => Promise<void>,
+    private readonly enableVideoThumbnails = false,
   ) {}
 
   public render(container: HTMLElement, attachments: MemoAttachment[]): void {
@@ -31,7 +32,11 @@ export class MemoAttachmentList {
     if (attachment.mime.startsWith("image/") && url) {
       item.createEl("img", { cls: "obsidian-memos-attachment__image", attr: { src: url, alt: attachment.name } });
     } else if (attachment.mime.startsWith("video/") && url) {
-      item.createEl("video", { cls: "obsidian-memos-attachment__media", attr: { src: url, preload: "metadata" } });
+      const video = item.createEl("video", {
+        cls: "obsidian-memos-attachment__media",
+        attr: { src: url, preload: "auto", muted: "true", playsinline: "true" },
+      });
+      if (this.enableVideoThumbnails) prepareVideoThumbnail(video);
     } else {
       const fileCard = item.createDiv({ cls: "obsidian-memos-attachment__file" });
       fileCard.createSpan({ cls: "obsidian-memos-attachment__file-icon", text: attachment.mime.startsWith("audio/") ? "🎵" : "📄" });
@@ -55,6 +60,31 @@ export class MemoAttachmentList {
       menu.showAtMouseEvent(event);
     });
   }
+}
+
+export function prepareVideoThumbnail(video: HTMLVideoElement): void {
+  const capture = (): void => {
+    if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
+    const canvas = document.createElement("canvas");
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    const context = canvas.getContext("2d");
+    if (!context) return;
+    context.drawImage(video, 0, 0, canvas.width, canvas.height);
+    try {
+      video.poster = canvas.toDataURL("image/jpeg", 0.82);
+    } catch {
+      // Some embedded media sources disallow canvas export; the video remains usable.
+    }
+  };
+  video.addEventListener("loadeddata", () => {
+    if (video.duration > 0) {
+      video.currentTime = Math.min(0.1, video.duration / 2);
+    } else {
+      capture();
+    }
+  }, { once: true });
+  video.addEventListener("seeked", capture, { once: true });
 }
 
 function formatFileSize(size: number | undefined): string {
