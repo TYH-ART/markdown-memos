@@ -770,10 +770,17 @@ export class MemosView extends ItemView {
 
   private openListContextMenu(memo: MemoRecord, event: MouseEvent): void {
     const menu = new Menu();
+    menu.addItem((item) => item.setTitle("复制").setIcon("copy").onClick(async () => {
+      try {
+        await navigator.clipboard.writeText(memo.content);
+        new Notice("已复制");
+      } catch {
+        new Notice("复制失败，请重试");
+      }
+    }));
     menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.openMoveMenu(memo)));
     if (!this.isMobileLayout()) {
       menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
-      menu.addItem((item) => item.setTitle("#").setIcon("hash").onClick(() => this.addTagFromList(memo)));
       menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     }
     menu.showAtMouseEvent(event);
@@ -806,11 +813,6 @@ export class MemosView extends ItemView {
       console.error("[Markdown Memos] 移动 Memo 失败。", error);
       new Notice("移动失败");
     }
-  }
-
-  private addTagFromList(memo: MemoRecord): void {
-    this.selectMemo(memo);
-    void this.detailCards.find((card) => card.path === memo.file.path)?.addTag("#");
   }
 
   private async togglePinnedFromList(memo: MemoRecord): Promise<void> {

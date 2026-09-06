@@ -5,6 +5,7 @@ import type { MemoAttachment, MemoRecord } from "../types";
 import { errorMessage, extractExternalUrls, joinMemoContent, splitMemoContent } from "../utils";
 import { MemoAttachmentList } from "./MemoAttachmentList";
 import { openTextEditingMenu } from "./TextEditingMenu";
+import { bindTitleToBody } from "./TitleBodyInput";
 
 export interface MemoCardOptions {
   onChanged: () => Promise<void>;
@@ -86,11 +87,6 @@ export class MemoCard {
         openTextEditingMenu(target, event);
         return;
       }
-      if (this.article.hasClass("is-reading-mode") && this.hasReadingSelection(event)) {
-        event.preventDefault();
-        this.openReadingSelectionMenu(event);
-        return;
-      }
       event.preventDefault();
       this.openMenu(event);
     });
@@ -146,11 +142,17 @@ export class MemoCard {
   }
 
   private openMenu(event: MouseEvent): void {
+    const selection = this.article.ownerDocument.getSelection();
+    const selectedText = selection?.anchorNode && selection.focusNode
+      && this.article.contains(selection.anchorNode) && this.article.contains(selection.focusNode)
+      ? selection.toString() : "";
+    const parts = splitMemoContent(this.memo.content);
+    const text = selectedText || [parts.title, parts.body].filter(Boolean).join("\n\n");
     const menu = new Menu();
+    menu.addItem((item) => item.setTitle("复制").setIcon("copy").onClick(() => void this.copyText(text)));
     menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.options.onMove?.()));
     if (!this.options.isMobileLayout?.()) {
       menu.addItem((item) => item.setTitle(this.memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinned()));
-      menu.addItem((item) => item.setTitle("#").setIcon("hash").onClick(() => void this.addTag("#")));
       menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemo()));
     }
     menu.showAtMouseEvent(event);
@@ -208,7 +210,7 @@ export class MemoCard {
     const titleMirror = titleField.createDiv({ cls: "obsidian-memos-card__editor-mirror" });
     const titleInput = titleField.createEl("textarea", {
       cls: "obsidian-memos-card__title-editor",
-      attr: { rows: "1", "aria-label": "编辑 Memo 标题", placeholder: "" },
+      attr: { rows: "1", "aria-label": "编辑 Memo 标题", placeholder: "标题", enterkeyhint: "next" },
     });
     titleInput.value = parts.title;
     if (tagToInsert) {
@@ -227,7 +229,6 @@ export class MemoCard {
     this.editorTextarea = textarea;
     this.editorTagTarget = titleInput;
     const links = this.display.createDiv({ cls: "obsidian-memos-card__editor-links" });
-    this.display.createDiv({ cls: "obsidian-memos-card__autosave-hint", text: "自动保存" });
 
     const updateDraft = (): void => {
       const content = joinMemoContent(titleInput.value, textarea.value);
@@ -242,6 +243,7 @@ export class MemoCard {
     };
     titleInput.addEventListener("input", updateDraft);
     textarea.addEventListener("input", updateDraft);
+    bindTitleToBody(titleInput, textarea);
     titleInput.addEventListener("focus", () => { this.editorTagTarget = titleInput; });
     textarea.addEventListener("focus", () => { this.editorTagTarget = textarea; });
     titleInput.addEventListener("scroll", () => { titleMirror.scrollLeft = titleInput.scrollLeft; });
@@ -285,25 +287,6 @@ export class MemoCard {
 
   private exitReadingMode(): void {
     this.article.removeClass("is-reading-mode");
-  }
-
-  private hasReadingSelection(event: MouseEvent): boolean {
-    const target = event.target;
-    if (target instanceof HTMLElement && target.closest("a")) return true;
-    const selection = window.getSelection();
-    return Boolean(selection && !selection.isCollapsed && selection.toString().trim() && selection.anchorNode && this.article.contains(selection.anchorNode));
-  }
-
-  private openReadingSelectionMenu(event: MouseEvent): void {
-    const target = event.target instanceof HTMLElement ? event.target : undefined;
-    const link = target?.closest<HTMLAnchorElement>("a");
-    const selectedText = window.getSelection()?.toString().trim() ?? "";
-    const text = selectedText || link?.href || "";
-    const menu = new Menu();
-    menu.addItem((item) => item.setTitle("复制").setIcon("copy").onClick(() => void this.copyText(text)));
-    menu.addItem((item) => item.setTitle("粘贴").setIcon("clipboard-paste").setDisabled(true));
-    menu.addItem((item) => item.setTitle("剪切").setIcon("scissors").setDisabled(true));
-    menu.showAtMouseEvent(event);
   }
 
   private scheduleAutoSave(content: string): void {

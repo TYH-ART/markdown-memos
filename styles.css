@@ -116,6 +116,7 @@
 
 .obsidian-memos-composer__title::placeholder {
   color: var(--text-faint) !important;
+  -webkit-text-fill-color: var(--text-faint) !important;
   font-size: 1.5rem;
   line-height: 1.35;
   opacity: 1;

@@ -1,7 +1,8 @@
 import { App, FuzzySuggestModal, normalizePath, Notice, TFile, TFolder } from "obsidian";
 import type { MemoAttachment, ObsidianMemosSettings } from "../types";
-import { formatMemoBasename, normalizeMemoFolder } from "../utils";
+import { errorMessage, formatMemoBasename, normalizeMemoFolder } from "../utils";
 import type { MemoRepository } from "./MemoRepository";
+import { exportBinaryFile } from "./FileExport";
 
 export class AttachmentService {
   public constructor(
@@ -32,7 +33,14 @@ export class AttachmentService {
     let added = 0;
     for (const file of files) {
       const path = this.uniqueAttachmentPath(file.name);
-      await this.app.vault.createBinary(path, await file.arrayBuffer());
+      const data = await file.arrayBuffer();
+      if (data.byteLength !== file.size) throw new Error(`附件读取不完整：${file.name}`);
+      const savedFile = await this.app.vault.createBinary(path, data);
+      const savedData = new Uint8Array(await this.app.vault.readBinary(savedFile));
+      const sourceData = new Uint8Array(data);
+      if (savedData.length !== sourceData.length || !savedData.every((byte, index) => byte === sourceData[index])) {
+        throw new Error(`附件保存校验失败：${file.name}，请重新上传`);
+      }
       await this.repository.addAttachment(memoFile, {
         path,
         name: file.name,
@@ -87,19 +95,32 @@ export class AttachmentService {
   }
 
   public async downloadAttachment(attachment: MemoAttachment): Promise<void> {
-    const file = this.app.vault.getAbstractFileByPath(attachment.path);
-    if (!(file instanceof TFile)) {
-      new Notice(`附件不存在：${attachment.name}`);
-      return;
+    try {
+      const file = this.app.vault.getAbstractFileByPath(attachment.path);
+      if (!(file instanceof TFile)) {
+        new Notice(`附件不存在：${attachment.name}`);
+        return;
+      }
+      const data = await this.app.vault.readBinary(file);
+      if (attachment.managed && attachment.size !== undefined && data.byteLength !== attachment.size) {
+        throw new Error("附件大小与上传记录不一致，请等待同步完成或重新上传原文件");
+      }
+      await exportBinaryFile(this.app, data, attachment.name, attachment.mime);
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      new Notice(`下载失败：${errorMessage(error)}`);
     }
-    const data = await this.app.vault.readBinary(file);
-    const url = URL.createObjectURL(new Blob([data], { type: attachment.mime }));
-    const anchor = this.app.workspace.containerEl.createEl("a");
-    anchor.href = url;
-    anchor.download = attachment.name;
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }
+
+  public async downloadExternalFile(file: File): Promise<void> {
+    try {
+      const data = await file.arrayBuffer();
+      if (data.byteLength !== file.size) throw new Error("附件读取不完整，请重新选择原文件");
+      await exportBinaryFile(this.app, data, file.name, file.type || inferMime(file.name));
+    } catch (error) {
+      if (error instanceof Error && error.name === "AbortError") return;
+      new Notice(`下载失败：${errorMessage(error)}`);
+    }
   }
 
   public async deleteManagedAttachment(attachment: MemoAttachment): Promise<void> {

@@ -8,6 +8,7 @@ import { errorMessage, joinMemoContent } from "../utils";
 import { prepareVideoThumbnail } from "./MemoAttachmentList";
 import { createTagSuggestionControl } from "./TagSuggestionControl";
 import { openTextEditingMenu } from "./TextEditingMenu";
+import { bindTitleToBody } from "./TitleBodyInput";
 
 type PendingAttachment =
   | { kind: "external"; file: File; name: string; mime: string; size: number; previewUrl?: string }
@@ -55,7 +56,7 @@ export class MemoComposer {
     this.titleMirror = titleField.createDiv({ cls: "obsidian-memos-composer__mirror" });
     this.titleInput = titleField.createEl("input", {
       cls: "obsidian-memos-composer__title",
-      attr: { type: "text", placeholder: this.isMobileLayout() ? "标题" : "", "aria-label": "Memo 标题" },
+      attr: { type: "text", placeholder: "标题", "aria-label": "Memo 标题", enterkeyhint: "next" },
     });
     const bodyField = composer.createDiv({ cls: "obsidian-memos-composer__field is-body" });
     this.bodyMirror = bodyField.createDiv({ cls: "obsidian-memos-composer__mirror" });
@@ -157,13 +158,14 @@ export class MemoComposer {
       if (event.defaultPrevented) return;
       // Let IME composition finish in the title field before moving focus.
       if (event.isComposing) return;
-      if (event.key === "Enter" || event.key === "ArrowDown") {
+      if (event.key === "ArrowDown") {
         event.preventDefault();
         event.stopPropagation();
         this.textarea.focus();
         this.textarea.setSelectionRange(0, 0);
       }
     });
+    bindTitleToBody(this.titleInput, this.textarea);
     owner.registerDomEvent(this.textarea, "keydown", submitFromKeyboard);
     owner.registerDomEvent(this.textarea, "keydown", (event: KeyboardEvent) => {
       if (event.defaultPrevented || event.key !== "ArrowUp") return;
@@ -269,7 +271,7 @@ export class MemoComposer {
 
   private async queueExternalAttachments(): Promise<void> {
     if (!this.attachmentService) return;
-    const files = await this.attachmentService.pickExternalAttachments(this.isMobileLayout() ? "image/*,video/*" : "*/*");
+    const files = await this.attachmentService.pickExternalAttachments();
     this.addPendingExternalFiles(files);
   }
 
@@ -359,13 +361,7 @@ export class MemoComposer {
       });
       return;
     }
-    const url = URL.createObjectURL(attachment.file);
-    const anchor = this.container.createEl("a");
-    anchor.href = url;
-    anchor.download = attachment.name;
-    anchor.click();
-    anchor.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await this.attachmentService?.downloadExternalFile(attachment.file);
   }
 
   private async persistPendingAttachments(memo: MemoRecord): Promise<void> {
