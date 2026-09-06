@@ -282,6 +282,16 @@ export class MemosView extends ItemView {
     });
     this.registerDomEvent(emptyTrashButton, "click", () => void this.emptyTrash());
     const composerHost = this.detailContentEl.createDiv({ cls: "obsidian-memos-composer-host" });
+    this.registerDomEvent(composerHost, "pointerdown", (event: PointerEvent) => {
+      // When the mobile drawer is open, tapping the composer is a close-drawer
+      // action. Do not let the hidden composer steal focus underneath it.
+      if (this.isMobileLayout() && !this.mobileDetail) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.mobileDetail = true;
+        this.updateLayoutState();
+      }
+    }, true);
     new MemoComposer(
       this,
       composerHost,
@@ -940,7 +950,10 @@ export class MemosView extends ItemView {
     // developer console. Platform.isMobile covers physical mobile builds while
     // keeping narrow desktop panes in the desktop layout.
     const appIsMobile = (this.app as unknown as { isMobile?: boolean }).isMobile;
-    return appIsMobile === true || Platform.isMobile;
+    const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const iosDevice = /iPad|iPhone|iPod/i.test(userAgent)
+      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(userAgent));
+    return appIsMobile === true || Platform.isMobile || iosDevice;
   }
 
   private startDividerDrag(event: PointerEvent): void {

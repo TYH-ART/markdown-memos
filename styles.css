@@ -539,10 +539,28 @@
 .obsidian-memos-detected-links a {
   max-width: 100%;
   overflow: hidden;
-  color: var(--text-accent);
+  /* URLs are metadata text; keep them visually neutral instead of using the
+   * theme accent (which can render as a purple highlight). */
+  color: var(--text-normal);
   font-size: var(--font-ui-small);
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Display mode must remain selectable so users can copy content without
+ * entering the editor first. */
+.obsidian-memos-card__display {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+.obsidian-memos-card__display a.external-link,
+.obsidian-memos-card__display a[href^="mailto:"] {
+  color: inherit !important;
+  background: none !important;
+  padding-inline-end: 0;
+  text-decoration: none !important;
+  box-shadow: none;
 }
 
 .obsidian-memos-card__editor:focus {

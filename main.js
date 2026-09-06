@@ -1605,7 +1605,9 @@ var MemoComposer = class {
     owner.registerDomEvent(composer, "focusout", (event) => {
       const nextTarget = event.relatedTarget;
       if (!(nextTarget instanceof Node) || !composer.contains(nextTarget)) {
-        composer.removeClass("is-mobile-expanded");
+        if (!this.titleInput.value.trim() && !this.textarea.value.trim() && this.pendingAttachments.length === 0) {
+          composer.removeClass("is-mobile-expanded");
+        }
       }
     });
     owner.registerDomEvent(composer, "paste", (event) => {
@@ -2324,6 +2326,14 @@ var MemosView = class extends import_obsidian11.ItemView {
     });
     this.registerDomEvent(emptyTrashButton, "click", () => void this.emptyTrash());
     const composerHost = this.detailContentEl.createDiv({ cls: "obsidian-memos-composer-host" });
+    this.registerDomEvent(composerHost, "pointerdown", (event) => {
+      if (this.isMobileLayout() && !this.mobileDetail) {
+        event.preventDefault();
+        event.stopPropagation();
+        this.mobileDetail = true;
+        this.updateLayoutState();
+      }
+    }, true);
     new MemoComposer(
       this,
       composerHost,
@@ -2943,7 +2953,9 @@ var MemosView = class extends import_obsidian11.ItemView {
   }
   isMobileLayout() {
     const appIsMobile = this.app.isMobile;
-    return appIsMobile === true || import_obsidian11.Platform.isMobile;
+    const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
+    const iosDevice = /iPad|iPhone|iPod/i.test(userAgent) || navigator.maxTouchPoints > 1 && /Macintosh/i.test(userAgent);
+    return appIsMobile === true || import_obsidian11.Platform.isMobile || iosDevice;
   }
   startDividerDrag(event) {
     if (this.isMobileLayout() || this.plugin.settings.listPaneCollapsed) {

@@ -116,7 +116,12 @@ export class MemoComposer {
     owner.registerDomEvent(composer, "focusout", (event: FocusEvent) => {
       const nextTarget = event.relatedTarget;
       if (!(nextTarget instanceof Node) || !composer.contains(nextTarget)) {
-        composer.removeClass("is-mobile-expanded");
+        // Keep the composer expanded once it contains text. This avoids the
+        // editor collapsing while moving between controls or after an iOS
+        // virtual-keyboard focus transition.
+        if (!this.titleInput.value.trim() && !this.textarea.value.trim() && this.pendingAttachments.length === 0) {
+          composer.removeClass("is-mobile-expanded");
+        }
       }
     });
     owner.registerDomEvent(composer, "paste", (event: ClipboardEvent) => {
