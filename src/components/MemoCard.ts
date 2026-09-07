@@ -6,6 +6,7 @@ import { errorMessage, extractExternalUrls, joinMemoContent, splitMemoContent } 
 import { MemoAttachmentList } from "./MemoAttachmentList";
 import { openTextEditingMenu } from "./TextEditingMenu";
 import { bindTitleToBody } from "./TitleBodyInput";
+import { resizeEditor } from "./EditorSizing";
 
 export interface MemoCardOptions {
   onChanged: () => Promise<void>;
@@ -15,6 +16,7 @@ export interface MemoCardOptions {
   isMobileLayout?: () => boolean;
   trashMode?: boolean;
   onMove?: () => void;
+  onDrag?: () => void;
 }
 
 export class MemoCard {
@@ -150,6 +152,7 @@ export class MemoCard {
     const text = selectedText || [parts.title, parts.body].filter(Boolean).join("\n\n");
     const menu = new Menu();
     menu.addItem((item) => item.setTitle("复制").setIcon("copy").onClick(() => void this.copyText(text)));
+    if (this.options.onDrag) menu.addItem((item) => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => this.options.onDrag?.()));
     menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.options.onMove?.()));
     if (!this.options.isMobileLayout?.()) {
       menu.addItem((item) => item.setTitle(this.memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinned()));
@@ -233,9 +236,8 @@ export class MemoCard {
     const updateDraft = (): void => {
       const content = joinMemoContent(titleInput.value, textarea.value);
       this.scheduleAutoSave(content);
-      titleInput.setCssProps({ height: "auto" });
-      titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
-      this.resizeMobileBodyEditor(textarea);
+      resizeEditor(titleInput);
+      resizeEditor(textarea);
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
       links.empty();
@@ -253,7 +255,7 @@ export class MemoCard {
     });
     this.display.addEventListener("focusout", () => {
       window.setTimeout(() => {
-        if (this.article.contains(document.activeElement)) return;
+        if (this.article.contains(this.article.ownerDocument.activeElement)) return;
         void this.finishEditing(joinMemoContent(titleInput.value, textarea.value));
       }, 0);
     });
@@ -265,24 +267,16 @@ export class MemoCard {
       this.display,
       this.memo.attachments,
     );
-    titleInput.setCssProps({ height: "auto" });
-    titleInput.setCssProps({ height: `${titleInput.scrollHeight}px` });
-    this.resizeMobileBodyEditor(textarea);
+    resizeEditor(titleInput);
+    resizeEditor(textarea);
     const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
-    initialTarget.focus();
+    initialTarget.focus({ preventScroll: true });
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
   }
 
   private enterReadingMode(): void {
     this.article.addClass("is-reading-mode");
     this.article.focus({ preventScroll: true });
-  }
-
-  private resizeMobileBodyEditor(textarea: HTMLTextAreaElement): void {
-    textarea.setCssProps({ height: "0px" });
-    const computed = window.getComputedStyle(textarea);
-    const lineHeight = Number.parseFloat(computed.lineHeight) || 26;
-    textarea.setCssProps({ height: `${Math.ceil(textarea.scrollHeight + lineHeight)}px` });
   }
 
   private exitReadingMode(): void {

@@ -65,7 +65,7 @@ export class MemoAttachmentList {
 export function prepareVideoThumbnail(video: HTMLVideoElement): void {
   const capture = (): void => {
     if (video.videoWidth <= 0 || video.videoHeight <= 0) return;
-    const canvas = document.createElement("canvas");
+    const canvas = createEl("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const context = canvas.getContext("2d");

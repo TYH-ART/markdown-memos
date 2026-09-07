@@ -13,7 +13,7 @@ export function bindTitleToBody(title: HTMLInputElement | HTMLTextAreaElement, b
   };
   title.addEventListener("keydown", (rawEvent) => {
     const event = rawEvent as KeyboardEvent;
-    if (event.key !== "Enter" || event.isComposing || event.keyCode === 229 || event.ctrlKey || event.metaKey) return;
+    if (event.key !== "Enter" || event.isComposing || event.ctrlKey || event.metaKey) return;
     event.preventDefault();
     event.stopPropagation();
     moveToBody();

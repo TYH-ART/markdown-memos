@@ -124,6 +124,7 @@ export default class ObsidianMemosPlugin extends Plugin {
         ? saved.activeMemoNotebookId
         : "default",
       composerTags: normalizeComposerTags(saved?.composerTags),
+      manualMemoOrder: Array.isArray(saved?.manualMemoOrder) ? saved.manualMemoOrder.filter((path): path is string => typeof path === "string") : [],
     };
     if (!this.settings.memoNotebooks.some((notebook) => notebook.id === this.settings.activeMemoNotebookId)) {
       this.settings.activeMemoNotebookId = this.settings.memoNotebooks[0]?.id ?? "default";

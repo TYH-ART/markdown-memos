@@ -9,17 +9,14 @@ interface MobileFilePlugins {
 
 /** Use a real file export instead of routing a blob URL through Obsidian's link handler. */
 export async function exportBinaryFile(app: App, data: ArrayBuffer, name: string, mime: string): Promise<void> {
-  if (Platform.isDesktopApp) {
-    // Lazy require: mobile must never attempt to load Electron or Node.
-    const electron = require("electron") as {
-      remote: { dialog: { showSaveDialog(options: { defaultPath: string; properties: string[] }): Promise<{ canceled: boolean; filePath?: string }> } };
-    };
+  if (Platform.isDesktop) {
+    const electron = await import("electron");
     const result = await electron.remote.dialog.showSaveDialog({
       defaultPath: name,
       properties: ["showOverwriteConfirmation"],
     });
     if (result.canceled || !result.filePath) return;
-    const fs = require("fs/promises") as typeof import("fs/promises");
+    const fs = await import("fs/promises");
     // Do not turn binary data into a string or write the whole backing Buffer.
     const bytes = new Uint8Array(data);
     await fs.writeFile(result.filePath, bytes);
@@ -57,7 +54,7 @@ export async function exportBinaryFile(app: App, data: ArrayBuffer, name: string
       button.addEventListener("click", () => {
         void navigator.share({ files: [file] }).then(() => modal.close(), (error: unknown) => {
           if (error instanceof Error && error.name === "AbortError") return;
-          reject(error);
+          reject(error instanceof Error ? error : new Error(String(error)));
           modal.close();
         });
       });

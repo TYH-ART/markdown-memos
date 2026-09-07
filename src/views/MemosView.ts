@@ -2,6 +2,7 @@ import { App, ItemView, Menu, Modal, Notice, Platform, setIcon, WorkspaceLeaf } 
 import type ObsidianMemosPlugin from "../main";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
+import { armMemoReorder, mergeVisibleOrder } from "../components/MemoReorder";
 import { formatListDate, getMemoListTitle, getSummary, MemoList } from "../components/MemoList";
 import { confirmMemoDeletion } from "../components/MemoDeleteModal";
 import type { MemoRecord } from "../types";
@@ -12,7 +13,7 @@ export const MEMOS_VIEW_TYPE = "obsidian-memos-view";
 
 const MIN_LIST_WIDTH = 240;
 const MAX_LIST_WIDTH = 420;
-type MemoSort = "modified-desc" | "modified-asc" | "name-asc" | "name-desc" | "tags-desc" | "tags-asc";
+type MemoSort = "manual" | "modified-desc" | "modified-asc" | "name-asc" | "name-desc" | "tags-desc" | "tags-asc";
 
 export class MemosView extends ItemView {
   private memoList?: MemoList;
@@ -43,12 +44,14 @@ export class MemosView extends ItemView {
   private expandedNotebookId = "default";
   private readonly unlockedNotebookIds = new Set<string>(["default"]);
   private mobileDrawerButton?: HTMLButtonElement;
+  private cancelReorder?: () => void;
 
   public constructor(
     leaf: WorkspaceLeaf,
     private readonly plugin: ObsidianMemosPlugin,
   ) {
     super(leaf);
+    if (plugin.settings.manualMemoOrder?.length) this.sortOption = "manual";
   }
 
   public getViewType(): string {
@@ -77,6 +80,7 @@ export class MemosView extends ItemView {
   }
 
   public override async onClose(): Promise<void> {
+    this.cancelReorder?.();
     this.refreshSequence += 1;
     this.destroyDetailCards();
     this.memoList?.destroy();
@@ -234,6 +238,7 @@ export class MemosView extends ItemView {
       attr: { "aria-label": "Memo 排序" },
     });
     addSelectOption(this.sortSelect, "modified-desc", "时间↓");
+    addSelectOption(this.sortSelect, "manual", "手动排序");
     addSelectOption(this.sortSelect, "modified-asc", "时间↑");
     addSelectOption(this.sortSelect, "name-asc", "名称 A→Z");
     addSelectOption(this.sortSelect, "name-desc", "名称 Z→A");
@@ -555,6 +560,8 @@ export class MemosView extends ItemView {
     if (!host || sequence !== this.refreshSequence) {
       return;
     }
+    this.cancelReorder?.();
+    const scrollTop = host.scrollTop;
     this.destroyDetailCards();
     host.empty();
 
@@ -599,18 +606,35 @@ export class MemosView extends ItemView {
         attachmentService: this.plugin.attachmentService,
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : undefined;
-          if (editing) {
-            window.requestAnimationFrame(() => this.scrollMemoToTop(memo.file.path));
-          }
         },
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
         trashMode: this.showTrash,
         onMove: () => this.openMoveMenu(memo),
+        onDrag: this.showTrash ? undefined : () => this.beginMemoReorder(memo),
       });
       this.detailCards.push(card);
       await card.render();
     }
+    host.scrollTop = scrollTop;
+  }
+
+  private beginMemoReorder(memo: MemoRecord): void {
+    const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
+    const item = Array.from(host?.children ?? []).find(child => (child as HTMLElement).dataset.memoPath === memo.file.path) as HTMLElement | undefined;
+    if (!host || !item) return;
+    this.cancelReorder?.();
+    this.mobileDetail = true;
+    this.updateLayoutState();
+    item.scrollIntoView({ block: "nearest" });
+    this.cancelReorder = armMemoReorder(host, item, paths => {
+      this.cancelReorder = undefined;
+      this.plugin.settings.manualMemoOrder = mergeVisibleOrder(this.allMemos.map(m => m.file.path), paths);
+      this.sortOption = "manual";
+      if (this.sortSelect) this.sortSelect.value = "manual";
+      void this.plugin.saveSettings().then(() => this.refresh()).catch(() => new Notice("排序保存失败，请重试"));
+    });
+    new Notice("拖动已选中的 Memo 调整位置，松手保存；Esc 取消，也可用方向键移动、回车保存");
   }
 
   private selectMemo(memo: MemoRecord): void {
@@ -751,6 +775,10 @@ export class MemosView extends ItemView {
   }
 
   private sortMemos(memos: MemoRecord[]): MemoRecord[] {
+    if (this.sortOption === "manual") {
+      const order = new Map((this.plugin.settings.manualMemoOrder ?? []).map((path, index) => [path, index]));
+      return [...memos].sort((a, b) => (order.get(a.file.path) ?? -1) - (order.get(b.file.path) ?? -1) || b.created.getTime() - a.created.getTime());
+    }
     return [...memos].sort((left, right) => {
       if (left.pinned !== right.pinned) return left.pinned ? -1 : 1;
       let comparison = 0;
@@ -778,6 +806,7 @@ export class MemosView extends ItemView {
         new Notice("复制失败，请重试");
       }
     }));
+    if (!this.showTrash) menu.addItem(item => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => this.beginMemoReorder(memo)));
     menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.openMoveMenu(memo)));
     if (!this.isMobileLayout()) {
       menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
@@ -906,21 +935,6 @@ export class MemosView extends ItemView {
     host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
   }
 
-  private scrollMemoToTop(path: string): void {
-    const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
-    const item = Array.from(host?.querySelectorAll<HTMLElement>(".obsidian-memos-feed-item") ?? [])
-      .find((candidate) => candidate.dataset.memoPath === path);
-    if (!host || !item) return;
-    const top = Math.max(0, item.getBoundingClientRect().top - host.getBoundingClientRect().top + host.scrollTop);
-    const remainingContent = host.scrollHeight - top;
-    const extraSpace = Math.max(0, host.clientHeight - remainingContent);
-    if (extraSpace > 0) {
-      const currentPadding = Number.parseFloat(window.getComputedStyle(host).paddingBottom) || 0;
-      host.style.paddingBottom = `${currentPadding + extraSpace}px`;
-    }
-    host.scrollTo({ top, behavior: "smooth" });
-  }
-
   private async toggleListPane(): Promise<void> {
     if (this.isMobileLayout()) {
       this.mobileDetail = !this.mobileDetail;
@@ -952,10 +966,7 @@ export class MemosView extends ItemView {
     // developer console. Platform.isMobile covers physical mobile builds while
     // keeping narrow desktop panes in the desktop layout.
     const appIsMobile = (this.app as unknown as { isMobile?: boolean }).isMobile;
-    const userAgent = typeof navigator !== "undefined" ? navigator.userAgent : "";
-    const iosDevice = /iPad|iPhone|iPod/i.test(userAgent)
-      || (navigator.maxTouchPoints > 1 && /Macintosh/i.test(userAgent));
-    return appIsMobile === true || Platform.isMobile || iosDevice;
+    return appIsMobile === true || Platform.isMobile;
   }
 
   private startDividerDrag(event: PointerEvent): void {
@@ -998,7 +1009,7 @@ function getMemoTagCount(memo: MemoRecord): number {
 }
 
 function isMemoSort(value: string | undefined): value is MemoSort {
-  return value === "modified-desc"
+  return value === "manual" || value === "modified-desc"
     || value === "modified-asc"
     || value === "name-asc"
     || value === "name-desc"

@@ -12,6 +12,7 @@ export interface ObsidianMemosSettings {
   memoNotebooks: MemoNotebook[];
   activeMemoNotebookId: string;
   composerTags: string[];
+  manualMemoOrder?: string[];
 }
 
 export interface MemoNotebook {
