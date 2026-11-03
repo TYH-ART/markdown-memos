@@ -397,3 +397,80 @@ test('Expanding a notebook selects it without closing the mobile sidebar', async
   assert.equal(view.plugin.settings.activeMemoNotebookId, 'travel');
   assert.equal(view.mobileDetail, false);
 });
+
+test('Mobile double tap enters editing exactly once and ignores a hold, selection, or pan', () => {
+  const { bindMobileDoubleTap } = load('src/components/MobileDoubleTap.ts');
+  const root = new EventTarget();
+  let edits = 0, selectable = true;
+  bindMobileDoubleTap(root, () => selectable, () => { edits++; });
+  const pointer = (type, t, y = 0) => {
+    const event = new Event(type, { cancelable: true });
+    Object.defineProperty(event, 'timeStamp', { value: t });
+    Object.assign(event, { pointerType: 'touch', pointerId: 1, isPrimary: true, clientX: 0, clientY: y });
+    root.dispatchEvent(event);
+    return event;
+  };
+  const tap = t => { pointer('pointerdown', t); pointer('pointerup', t + 50); };
+  tap(10); tap(150);
+  assert.equal(edits, 1);
+  assert.equal(pointer('click', 205).defaultPrevented, true);
+  pointer('pointerdown', 500); pointer('pointerup', 1000); tap(1040);
+  tap(1800); pointer('pointerdown', 1900); pointer('pointermove', 1910, 100); pointer('pointerup', 1940);
+  selectable = false;
+  tap(2200); tap(2300);
+  assert.equal(edits, 1);
+});
+
+test('New memo shortcut focuses the body on desktop and mobile without a delayed title focus', () => {
+  const { MemosView } = load('src/views/MemosView.ts', { obsidian: {
+    ItemView: class {}, Modal: class {}, FuzzySuggestModal: class {}, PluginSettingTab: class {},
+  } });
+  for (const mobile of [false, true]) {
+    const body = new Control('');
+    MemosView.prototype.composerFocus.call({ isMobileLayout: () => mobile, detailContentEl: {
+      querySelector: selector => selector === '.obsidian-memos-composer__input' ? body : null,
+    } });
+    assert.equal(body.focused, true);
+  }
+});
+
+test('Body paste menu replaces only the selected body range even if the menu moves the caret', async () => {
+  const actions = new Map();
+  class Menu {
+    addItem(build) {
+      let label;
+      build({ setTitle(value) { label = value; return this; }, setIcon() { return this; }, setDisabled() { return this; },
+        onClick(fn) { actions.set(label, fn); return this; } });
+    }
+    onHide() {}
+    showAtMouseEvent() {}
+  }
+  const { openTextEditingMenu } = load('src/components/TextEditingMenu.ts', {
+    obsidian: { Menu }, navigator: { clipboard: { readText: async () => '第一行\nhttps://example.com' } },
+  });
+  const title = new Control('原标题'), body = new Control('前abc后');
+  body.classList = { add() {}, remove() {} };
+  body.setRangeText = function(text, start, end) { this.value = this.value.slice(0, start) + text + this.value.slice(end); };
+  bindTitleToBody(title, body);
+  body.setSelectionRange(1, 4);
+  openTextEditingMenu(body, { preventDefault() {}, stopPropagation() {} });
+  body.setSelectionRange(0, 0);
+  actions.get('粘贴')();
+  await Promise.resolve();
+  assert.equal(title.value, '原标题');
+  assert.equal(body.value, '前第一行\nhttps://example.com后');
+  assert.equal(body.focused, true);
+});
+
+test('Mobile text selection picks the touched URL or Han character and only opens a complete HTTP(S) selection', () => {
+  const { initialWord, selectedWebUrl } = load('src/components/MobileSelection.ts', { obsidian: {} });
+  const text = '请到https://example.org/a?q=7，继续';
+  const [a, b] = initialWord(text, text.indexOf('org'));
+  assert.equal(text.slice(a, b), 'https://example.org/a?q=7');
+  assert.deepEqual(initialWord(text, 1), [1, 2]);
+  assert.equal(selectedWebUrl('  HTTP://example.org:8080/a  '), 'http://example.org:8080/a');
+  for (const invalid of ['javascript:alert(1)', 'file:///etc/test', 'https://', 'https://a.example and text',
+      'https://user:pass@example.org', 'https://example.org\nother']) {
+    assert.equal(selectedWebUrl(invalid), undefined);
+  }
+});

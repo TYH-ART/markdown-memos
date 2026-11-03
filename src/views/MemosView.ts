@@ -840,13 +840,8 @@ export class MemosView extends ItemView {
         new Notice("复制失败，请重试");
       }
     }));
-    const host = (event.target as Element)?.closest<HTMLElement>("[data-sort-key]")?.parentElement;
-    if (host) menu.addItem(item => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => host.addClass("is-arranging")));
-
-    {
-      menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
-      menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
-    }
+    menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
+    menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     menu.showAtMouseEvent(event);
   }
 
@@ -915,10 +910,7 @@ export class MemosView extends ItemView {
   }
 
   private composerFocus(): void {
-    window.setTimeout(() => {
-      const selector = this.isMobileLayout() ? ".obsidian-memos-composer__input" : ".obsidian-memos-composer__title";
-      this.detailContentEl?.querySelector<HTMLInputElement | HTMLTextAreaElement>(selector)?.focus();
-    }, 0);
+    this.detailContentEl?.querySelector<HTMLTextAreaElement>(".obsidian-memos-composer__input")?.focus();
   }
 
   private destroyDetailCards(): void {

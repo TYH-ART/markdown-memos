@@ -130,8 +130,19 @@ export class MemoComposer {
       event.preventDefault();
       this.addPendingExternalFiles(files);
     });
-    owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event, this.textarea));
-    owner.registerDomEvent(this.textarea, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.textarea, event));
+    // Focusing a collapsed body reveals the title above the pointer. A subsequent
+    // contextmenu event can land on that newly visible title instead of the pressed body.
+    let pressedField: HTMLInputElement | HTMLTextAreaElement | undefined;
+    owner.registerDomEvent(composer, "pointerdown", (event: PointerEvent) => {
+      pressedField = event.target === this.textarea ? this.textarea : event.target === this.titleInput ? this.titleInput : undefined;
+    });
+    owner.registerDomEvent(composer, "keydown", () => { pressedField = undefined; });
+    owner.registerDomEvent(composer, "contextmenu", (event: MouseEvent) => {
+      if (event.target !== this.titleInput && event.target !== this.textarea) return;
+      const field = pressedField ?? (event.target === this.titleInput ? this.titleInput : this.textarea);
+      pressedField = undefined;
+      openTextEditingMenu(field, event, field === this.titleInput ? this.textarea : undefined);
+    });
     owner.registerDomEvent(this.textarea, "scroll", () => {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
@@ -213,14 +224,13 @@ export class MemoComposer {
         this.composerEl.removeClass("is-mobile-expanded");
         const activeElement = this.container.ownerDocument.activeElement;
         if (activeElement instanceof HTMLElement && this.container.contains(activeElement)) activeElement.blur();
-      } else {
-        this.titleInput.focus();
       }
     } catch (error) {
       console.error("[Markdown Memos] 创建 Memo 失败。", error);
       new Notice(`创建 Memo 失败：${errorMessage(error)}`);
     } finally {
       this.setSubmitting(false);
+      if (!this.isMobileLayout() && !this.textarea.value && !this.titleInput.value) this.textarea.focus();
     }
   }
 

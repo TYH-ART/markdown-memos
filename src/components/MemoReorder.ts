@@ -98,7 +98,6 @@ export function bindSidebarDrag(handle: HTMLElement, row: HTMLElement, group: st
     suppressClick = false;
     const controller = new AbortController();
     const options = { signal: controller.signal };
-    const armed = host.hasClass("is-arranging");
     let timer = 0;
     let frame = 0;
     let y = down.clientY;
@@ -160,8 +159,7 @@ export function bindSidebarDrag(handle: HTMLElement, row: HTMLElement, group: st
         if (sorted.some((peer, index) => peer !== peers[index])) save(sorted.map(peer => peer.dataset.sortKey!));
       }
     };
-    if (armed) begin();
-    else timer = win.setTimeout(begin, 420);
+    timer = win.setTimeout(begin, 420);
     doc.addEventListener("pointermove", event => {
       if (event.pointerId !== down.pointerId) return;
       x = event.clientX;

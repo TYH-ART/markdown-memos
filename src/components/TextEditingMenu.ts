@@ -34,18 +34,22 @@ export function openTextEditingMenu(control: TextEditingControl, event: MouseEve
   const end = control.selectionEnd ?? start;
   const hasSelection = end > start;
   const menu = new Menu();
+  control.classList.add("has-memo-edit-menu");
+  menu.onHide(() => {
+    control.classList.remove("has-memo-edit-menu");
+    if (control.isConnected) control.focus({ preventScroll: true });
+  });
   addCopyItem(menu, control.value.slice(start, end));
-  menu.addItem((item) => item.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void pasteSelection(control, bodyForTitle)));
+  menu.addItem((item) => item.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void pasteSelection(control, start, end, bodyForTitle)));
   menu.addItem((item) => item.setTitle("剪切").setIcon("scissors").setDisabled(!hasSelection).onClick(() => void cutSelection(control)));
   menu.showAtMouseEvent(event);
 }
 
-async function pasteSelection(control: TextEditingControl, bodyForTitle?: HTMLTextAreaElement): Promise<void> {
+async function pasteSelection(control: TextEditingControl, start: number, end: number, bodyForTitle?: HTMLTextAreaElement): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
+    control.setSelectionRange(start, end);
     if (bodyForTitle && pasteMultilineTitle(control, bodyForTitle, text)) return;
-    const start = control.selectionStart ?? control.value.length;
-    const end = control.selectionEnd ?? start;
     control.setRangeText(text, start, end, "end");
     control.dispatchEvent(new Event("input"));
     control.focus();

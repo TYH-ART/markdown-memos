@@ -3,9 +3,11 @@ import type { AttachmentService } from "../services/AttachmentService";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoAttachment, MemoRecord } from "../types";
 import { errorMessage, joinMemoContent, splitMemoContent } from "../utils";
+import { bindMobileSelection } from "./MobileSelection";
 import { MemoAttachmentList } from "./MemoAttachmentList";
 import { openReadingCopyMenu, openTextEditingMenu } from "./TextEditingMenu";
 import { bindTitleToBody } from "./TitleBodyInput";
+import { bindMobileDoubleTap } from "./MobileDoubleTap";
 import { resizeEditor } from "./EditorSizing";
 
 export interface MemoCardOptions {
@@ -20,6 +22,7 @@ export interface MemoCardOptions {
 export class MemoCard {
   private readonly article: HTMLElement;
   private readonly display: HTMLElement;
+  private stopSelection?: () => void;
   private markdownChild?: MarkdownRenderChild;
   private editSaveTimer?: number;
   private editDraft?: string;
@@ -100,14 +103,14 @@ export class MemoCard {
         void this.finishEditing(joinMemoContent(title, body));
         return;
       }
-      if (event.detail === 2 && !(this.options.isMobileLayout?.() && !this.article.ownerDocument.getSelection()?.isCollapsed)) {
+      if (event.detail === 2 && !this.options.isMobileLayout?.()) {
         event.preventDefault();
         if (this.article.hasClass("is-editing")) {
           const title = this.editorTitleInput?.value ?? "";
           const body = this.editorTextarea?.value ?? "";
           void this.finishEditing(joinMemoContent(title, body));
         } else {
-          void this.startEditing();
+          void this.startEditing(undefined, Boolean(target?.closest(".obsidian-memos-card__title")));
         }
       }
     });
@@ -120,6 +123,12 @@ export class MemoCard {
     this.article.tabIndex = -1;
 
     this.display = this.article.createDiv({ cls: "obsidian-memos-card__display" });
+    if (this.options.isMobileLayout?.()) {
+      bindMobileDoubleTap(this.article, target =>
+        !this.article.hasClass("is-editing") && !this.display.hasClass("has-mobile-selection") &&
+        target instanceof Element && !target.closest("a, button, input, textarea, select, [role=button], .obsidian-memos-attachments"),
+        () => void this.startEditing());
+    }
   }
 
   public async render(): Promise<void> {
@@ -136,6 +145,7 @@ export class MemoCard {
   }
 
   public destroy(): void {
+    this.stopSelection?.();
     if (this.editSaveTimer !== undefined) window.clearTimeout(this.editSaveTimer);
     this.options.onEditingChange?.(false);
     this.unloadMarkdownChild();
@@ -143,6 +153,8 @@ export class MemoCard {
 
 
   private async renderDisplay(): Promise<void> {
+    this.stopSelection?.();
+    if (this.options.isMobileLayout?.()) this.stopSelection = bindMobileSelection(this.display);
     this.unloadMarkdownChild();
     this.display.empty();
     this.article.removeClass("is-editing");
@@ -179,13 +191,14 @@ export class MemoCard {
     );
   }
 
-  private async startEditing(tagToInsert?: string): Promise<void> {
+  private async startEditing(tagToInsert?: string, editTitle = false): Promise<void> {
     if (this.article.hasClass("is-editing")) {
       if (tagToInsert) this.insertTagIntoEditor(tagToInsert);
       return;
     }
     this.unloadMarkdownChild();
     this.display.empty();
+    this.stopSelection?.();
     this.article.addClass("is-editing");
     this.options.onEditingChange?.(true);
     this.lastPersistedContent = this.memo.content;
@@ -235,7 +248,7 @@ export class MemoCard {
     });
     this.display.addEventListener("focusout", () => {
       window.setTimeout(() => {
-        if (this.article.contains(this.article.ownerDocument.activeElement)) return;
+        if (editor.querySelector(".has-memo-edit-menu") || this.article.contains(this.article.ownerDocument.activeElement)) return;
         void this.finishEditing(joinMemoContent(titleInput.value, textarea.value));
       }, 0);
     });
@@ -248,7 +261,7 @@ export class MemoCard {
     );
     resizeEditor(titleInput);
     resizeEditor(textarea);
-    const initialTarget = !tagToInsert && !parts.title && parts.body ? textarea : titleInput;
+    const initialTarget = tagToInsert || editTitle ? titleInput : textarea;
     initialTarget.focus({ preventScroll: true });
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
   }

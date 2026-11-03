@@ -2149,9 +2149,16 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   flex: 1 1 auto;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding-bottom: max(36px, env(safe-area-inset-bottom));
+  /* Put the mobile navigation clearance inside the scrollport. */
+  padding-bottom: 0;
+  scroll-padding-bottom: calc(84px + env(safe-area-inset-bottom, 0px));
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+}
+
+.is-mobile .obsidian-memos-detail-card-host::after {
+  content: "";
+  flex: 0 0 calc(84px + env(safe-area-inset-bottom, 0px));
 }
 
 .is-mobile .obsidian-memos-detail-card-host::-webkit-scrollbar {
@@ -2743,3 +2750,35 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   object-fit: contain;
   margin-inline: auto;
 }
+
+.uses-mobile-selection :is(.obsidian-memos-card__title, .obsidian-memos-card__content),
+.uses-mobile-selection :is(.obsidian-memos-card__title, .obsidian-memos-card__content) * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+.memos-selection-overlay { position: fixed; inset: 0; z-index: var(--layer-menu, 100); pointer-events: none; }
+.memos-selection-mark { position: absolute; background: color-mix(in srgb, var(--interactive-accent) 32%, transparent); }
+.memos-selection-toolbar {
+  position: absolute; display: flex; align-items: center; padding: 3px 5px;
+  border-radius: 9px; background: var(--background-primary); color: var(--text-normal); border: 1px solid var(--background-modifier-border);
+  pointer-events: auto; box-shadow: var(--shadow-s);
+}
+.memos-selection-toolbar button {
+  display: flex; flex-direction: column; gap: 4px; align-items: center; height: auto;
+  border: 0; box-shadow: none; background: transparent; color: inherit; padding: 6px 10px;
+}
+.memos-selection-toolbar[hidden], .memos-selection-toolbar button[hidden] { display: none; }
+.memos-selection-grip {
+  position: absolute; width: 32px; height: 34px; transform: translate(-50%, -3px);
+  touch-action: none; pointer-events: auto;
+}
+.memos-selection-grip::after {
+  content: ""; position: absolute; top: 3px; left: 50%; transform: translateX(-50%);
+  width: 12px; height: 15px; border-radius: 2px 2px 8px 8px; background: var(--interactive-accent);
+}
+.memos-selection-grip.is-start { transform: translate(-100%, -3px); }
+.memos-selection-grip.is-end { transform: translate(0, -3px); }
+.memos-selection-grip.is-start::after { left: auto; right: 0; transform: none; border-radius: 8px 0 8px 8px; }
+.memos-selection-grip.is-end::after { left: 0; transform: none; border-radius: 0 8px 8px 8px; }
+.memos-selection-overlay.is-hit-testing * { pointer-events: none; }
