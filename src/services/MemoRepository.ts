@@ -22,7 +22,9 @@ export class MemoRepository {
   }
 
   public createMemo(rawContent: string, options: CreateMemoOptions = {}): Promise<MemoRecord> {
-    const operation = this.createQueue.then(() => this.createMemoInternal(rawContent, options));
+    const destination = options.notebookId ?? this.getSettings().activeMemoNotebookId;
+    const submitted = { ...options, notebookId: destination };
+    const operation = this.createQueue.then(() => this.createMemoInternal(rawContent, submitted));
     this.createQueue = operation.then(
       () => undefined,
       () => undefined,
@@ -30,7 +32,7 @@ export class MemoRepository {
     return operation;
   }
 
-  private async createMemoInternal(rawContent: string, options: CreateMemoOptions): Promise<MemoRecord> {
+  private async createMemoInternal(rawContent: string, options: CreateMemoOptions & { notebookId: string }): Promise<MemoRecord> {
     if (!rawContent.trim() && !options.allowEmpty) {
       throw new Error("Memo 内容不能为空");
     }
@@ -51,7 +53,7 @@ export class MemoRepository {
         completed: false,
         completedAt: null,
         attachments: [],
-        notebookId: options.notebookId ?? "default",
+        notebookId: options.notebookId,
         trashedAt: null,
       },
       content,

@@ -293,3 +293,107 @@ test('Image and Word attachments open without creating an Obsidian leaf', async 
   await service.openAttachment({ path: file.path, name: file.name, mime: 'application/octet-stream' });
   assert.equal(opened, file.path);
 });
+
+test('Sidebar copy and title paste omit storage blank lines while preserving indentation and paragraph breaks', () => {
+  const { memoClipboardText } = load('src/utils.ts', { obsidian: {} });
+  assert.equal(memoClipboardText('\r\n\r\n\r\n\t\r\n    正文\r\n\r\n下一段'), '    正文\n\n下一段');
+  const text = memoClipboardText('标题\n\n\n正文\n\n下一段');
+  assert.equal(text, '标题\n正文\n\n下一段');
+  const title = new Control(''), body = new Control('');
+  bindTitleToBody(title, body);
+  send(title, 'paste', { clipboardData: { getData: () => text } });
+  assert.equal(title.value, '标题');
+  assert.equal(body.value, '正文\n\n下一段');
+});
+
+test('Upload, re-read the memo and download everyday file types without changing names or bytes', async () => {
+  const fs = require('node:fs/promises');
+  const dir = await mkdtemp(path.join(tmpdir(), 'memos-attachment-flow-'));
+  try {
+    const output = path.join(dir, 'exports');
+    const longName = '设备'.repeat(40) + '.pdf';
+    const names = ['报告.docx', '表格.XLSX', '演示.pptx', longName, '旧文档.doc', '数据.csv',
+      '文本.txt', '笔记.md', '照片.jpg', '截屏.png', '手机.heic', '录像.mp4', '录音.m4a',
+      '备份.zip', '素材.7z', '设置.json', '未知格式.abc', '空文件.txt'];
+    const sources = names.map(name => path.join(dir, name));
+    const bytes = names.map((name, i) => name === '空文件.txt' ? Buffer.alloc(0) : Buffer.from([0, i, 31, 127, 128, 254, 255]));
+    await Promise.all(sources.map((name, i) => fs.writeFile(name, bytes[i])));
+
+    class TFile { constructor(path) { this.path = path; this.name = path.split('/').pop(); this.stat = { ctime: 1, mtime: 1 }; } }
+    class TFolder {}
+    const nodes = new Map();
+    const vault = {
+      getAbstractFileByPath: path => nodes.get(path),
+      createFolder: async path => nodes.set(path, new TFolder()),
+      create: async (path, text) => { const file = Object.assign(new TFile(path), { text }); nodes.set(path, file); return file; },
+      read: async file => file.text, cachedRead: async file => file.text,
+      modify: async (file, text) => { file.text = text; },
+      async createBinary(path, buffer) {
+        assert.ok(Buffer.byteLength(path.split('/').pop()) <= 255);
+        assert.ok(!nodes.has(path));
+        const file = Object.assign(new TFile(path), { buffer: buffer.slice(0) });
+        nodes.set(path, file);
+        return file;
+      },
+      readBinary: async file => file.buffer.slice(0),
+    };
+    const environment = {
+      obsidian: { normalizePath: path => path, TFile, TFolder, FuzzySuggestModal: class {},
+        parseYaml: JSON.parse, stringifyYaml: JSON.stringify, Notice: class {},
+        Platform: { isDesktop: true, isDesktopApp: true } },
+      electron: { remote: { dialog: { showOpenDialog: async () => ({ filePaths: sources }) } } },
+    };
+    const app = { vault, metadataCache: { getFileCache: () => null }, loadLocalStorage: () => output, saveLocalStorage() {} };
+    const settings = () => ({ memoFolder: 'Memos', attachmentFolder: '' });
+    const { MemoRepository } = load('src/services/MemoRepository.ts', environment);
+    const repo = new MemoRepository(app, settings);
+    const { AttachmentService } = load('src/services/AttachmentService.ts', environment);
+    const service = new AttachmentService(app, repo, settings);
+    const memo = await repo.createMemo('', { allowEmpty: true });
+    assert.equal(await service.addExternalAttachments(memo.file), names.length);
+    const stored = await repo.getMemo(memo.file);
+    assert.deepEqual(stored.attachments.map(a => a.name), names);
+    for (const [i, attachment] of stored.attachments.entries()) {
+      assert.equal(attachment.size, bytes[i].length);
+      assert.equal(path.extname(attachment.path), path.extname(names[i]));
+      if (names[i] !== '未知格式.abc') assert.notEqual(attachment.mime, 'application/octet-stream');
+      await service.downloadAttachment(attachment);
+      assert.deepEqual(await fs.readFile(path.join(output, names[i])), bytes[i]);
+    }
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
+
+test('Queued and attachment-only records keep their submitted notebook in the written file', async () => {
+  const { MemoRepository } = load('src/services/MemoRepository.ts', { obsidian: {
+    normalizePath: value => value, stringifyYaml: value => JSON.stringify(value),
+  } });
+  const settings = { memoFolder: 'Memos', activeMemoNotebookId: 'travel' };
+  const files = [];
+  const repo = new MemoRepository({ vault: { create: async (name, markdown) => {
+    files.push(markdown);
+    return { path: name };
+  } } }, () => settings);
+  repo.ensureFolder = async () => {};
+  repo.getUniqueMemoPath = () => 'new.md';
+  repo.readMemo = async file => ({ file });
+  const first = repo.createMemo('hello');
+  settings.activeMemoNotebookId = 'other';
+  const options = { notebookId: 'private', allowEmpty: true };
+  const second = repo.createMemo('', options);
+  options.notebookId = 'other';
+  await Promise.all([first, second]);
+  assert.deepEqual(files.map(markdown => JSON.parse(markdown.split('\n')[1]).notebookId), ['travel', 'private']);
+});
+
+test('Expanding a notebook selects it without closing the mobile sidebar', async () => {
+  const { MemosView } = load('src/views/MemosView.ts', { obsidian: {
+    ItemView: class {}, Modal: class {}, FuzzySuggestModal: class {}, PluginSettingTab: class {},
+  } });
+  const view = { plugin: { settings: { activeMemoNotebookId: 'default' }, saveSettings: async () => {} },
+    renderMobileLibrary() {}, refresh: async () => {} };
+  await MemosView.prototype.selectNotebook.call(view, { id: 'travel', private: false }, false);
+  assert.equal(view.activeNotebookId, 'travel');
+  assert.equal(view.expandedNotebookId, 'travel');
+  assert.equal(view.plugin.settings.activeMemoNotebookId, 'travel');
+  assert.equal(view.mobileDetail, false);
+});

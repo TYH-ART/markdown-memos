@@ -229,8 +229,19 @@ class VaultFileSuggestModal extends FuzzySuggestModal<TFile> {
 }
 
 function sanitizeFilename(name: string): string {
-  const sanitized = name.trim().replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ");
-  return sanitized.slice(0, 120) || "attachment";
+  const sanitized = name.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").replace(/[. ]+$/, "") || "attachment";
+  // Leave room for the timestamp and collision suffix on byte-limited file systems.
+  const encoder = new TextEncoder();
+  const ext = sanitized.match(/\.[a-zA-Z0-9]{1,16}$/)?.[0] ?? "";
+  const stem = ext ? sanitized.slice(0, -ext.length) : sanitized;
+  let bytes = ext.length;
+  let result = "";
+  for (const character of stem) {
+    bytes += encoder.encode(character).length;
+    if (bytes > 220) break;
+    result += character;
+  }
+  return (result || "attachment") + ext;
 }
 
 export function isWordDocument(name: string, mime: string): boolean {
@@ -247,7 +258,10 @@ export function inferMime(filename: string): string {
     pdf: "application/pdf", doc: "application/msword", docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
     xls: "application/vnd.ms-excel", xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ppt: "application/vnd.ms-powerpoint", pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
-    zip: "application/zip", txt: "text/plain", md: "text/markdown",
+    bmp: "image/bmp", avif: "image/avif", heic: "image/heic", heif: "image/heif", tif: "image/tiff", tiff: "image/tiff",
+    m4v: "video/mp4", mkv: "video/x-matroska", avi: "video/x-msvideo", flac: "audio/flac", aac: "audio/aac",
+    zip: "application/zip", "7z": "application/x-7z-compressed", rar: "application/vnd.rar", gz: "application/gzip", tar: "application/x-tar",
+    txt: "text/plain", md: "text/markdown", csv: "text/csv", tsv: "text/tab-separated-values", json: "application/json", rtf: "application/rtf",
   };
   return mimeByExtension[extension] ?? "application/octet-stream";
 }

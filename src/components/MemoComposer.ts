@@ -130,7 +130,7 @@ export class MemoComposer {
       event.preventDefault();
       this.addPendingExternalFiles(files);
     });
-    owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event));
+    owner.registerDomEvent(this.titleInput, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.titleInput, event, this.textarea));
     owner.registerDomEvent(this.textarea, "contextmenu", (event: MouseEvent) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;

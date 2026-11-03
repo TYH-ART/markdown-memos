@@ -35,18 +35,18 @@
 
 .obsidian-memos-composer {
   position: relative;
-  margin-bottom: 18px;
+  margin-bottom: 0;
   overflow: visible;
   border: 1px solid var(--background-modifier-border);
   border-radius: var(--radius-l);
   background: var(--background-primary-alt);
-  box-shadow: var(--shadow-s);
-  transition: border-color 120ms ease, box-shadow 120ms ease;
+  box-shadow: none;
+  transition: border-color 120ms ease;
 }
 
 .obsidian-memos-composer:focus-within {
   border-color: var(--background-modifier-border);
-  box-shadow: var(--shadow-s);
+  box-shadow: none;
 }
 
 .obsidian-memos-composer__field {
@@ -755,7 +755,7 @@
   flex: 0 0 var(--memos-list-width);
   flex-direction: column;
   overflow: hidden;
-  background: var(--background-secondary);
+  background: var(--background-primary);
   opacity: 1;
   transition: width 220ms cubic-bezier(0.22, 1, 0.36, 1), min-width 220ms cubic-bezier(0.22, 1, 0.36, 1),
     flex-basis 220ms cubic-bezier(0.22, 1, 0.36, 1), opacity 140ms ease;
@@ -869,7 +869,7 @@
   min-height: 64px;
   padding: 10px 13px 9px;
   border-bottom: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
+  background: var(--background-primary-alt);
   cursor: pointer;
   user-select: none;
   transition: background-color 100ms ease, transform 180ms cubic-bezier(0.22, 1, 0.36, 1);
@@ -1134,7 +1134,7 @@
   min-height: 0;
   flex: 1 1 auto;
   flex-direction: column;
-  background: var(--background-secondary);
+  background: var(--background-primary);
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__upper {
@@ -1330,8 +1330,8 @@
   z-index: 2;
   min-height: 0;
   flex: 0 0 auto;
-  margin-bottom: 8px;
-  background: var(--background-primary);
+  margin-bottom: 10px;
+  background: transparent;
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-composer__field.is-title {
@@ -1691,8 +1691,8 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   min-width: 70%;
   flex-basis: 70%;
   border-right: 1px solid var(--background-modifier-border);
-  background: var(--background-secondary);
-  box-shadow: var(--shadow-l);
+  background: var(--background-primary);
+  box-shadow: none;
   opacity: 1;
   pointer-events: auto;
   transform: translateX(0);
@@ -2141,7 +2141,7 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   z-index: 2;
   flex: 0 0 auto;
   margin: 0 0 10px;
-  background: var(--background-primary);
+  background: transparent;
 }
 
 .is-mobile .obsidian-memos-detail-card-host {

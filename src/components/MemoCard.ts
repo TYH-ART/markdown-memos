@@ -84,7 +84,7 @@ export class MemoCard {
     owner.registerDomEvent(this.article, "contextmenu", (event: MouseEvent) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        openTextEditingMenu(target, event);
+        openTextEditingMenu(target, event, target === this.editorTitleInput ? this.editorTextarea : undefined);
         return;
       }
       if (openReadingCopyMenu(this.display, event)) return;

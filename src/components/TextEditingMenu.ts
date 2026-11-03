@@ -1,3 +1,4 @@
+import { pasteMultilineTitle } from "./TitleBodyInput";
 import { Menu, Notice } from "obsidian";
 import { errorMessage } from "../utils";
 
@@ -26,7 +27,7 @@ function addCopyItem(menu: Menu, text: string): void {
   }));
 }
 
-export function openTextEditingMenu(control: TextEditingControl, event: MouseEvent): void {
+export function openTextEditingMenu(control: TextEditingControl, event: MouseEvent, bodyForTitle?: HTMLTextAreaElement): void {
   event.preventDefault();
   event.stopPropagation();
   const start = control.selectionStart ?? 0;
@@ -34,14 +35,15 @@ export function openTextEditingMenu(control: TextEditingControl, event: MouseEve
   const hasSelection = end > start;
   const menu = new Menu();
   addCopyItem(menu, control.value.slice(start, end));
-  menu.addItem((item) => item.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void pasteSelection(control)));
+  menu.addItem((item) => item.setTitle("粘贴").setIcon("clipboard-paste").onClick(() => void pasteSelection(control, bodyForTitle)));
   menu.addItem((item) => item.setTitle("剪切").setIcon("scissors").setDisabled(!hasSelection).onClick(() => void cutSelection(control)));
   menu.showAtMouseEvent(event);
 }
 
-async function pasteSelection(control: TextEditingControl): Promise<void> {
+async function pasteSelection(control: TextEditingControl, bodyForTitle?: HTMLTextAreaElement): Promise<void> {
   try {
     const text = await navigator.clipboard.readText();
+    if (bodyForTitle && pasteMultilineTitle(control, bodyForTitle, text)) return;
     const start = control.selectionStart ?? control.value.length;
     const end = control.selectionEnd ?? start;
     control.setRangeText(text, start, end, "end");

@@ -78,6 +78,11 @@ function joinMemoContent(title, body) {
 
 ${body}` : normalizedTitle;
 }
+function memoClipboardText(content) {
+  const { title, body } = splitMemoContent(content);
+  const firstParagraph = body.replace(/^(?:[^\S\n]*\n)+/, "");
+  return [title.trim() ? title : "", firstParagraph].filter(Boolean).join("\n");
+}
 function extractMemoTagOccurrences(content) {
   const tags = [];
   const pattern = /#([\p{L}\p{N}_/-]+)/gu;
@@ -104,7 +109,10 @@ var MemoRepository = class {
     return normalizeMemoFolder(this.getSettings().memoFolder);
   }
   createMemo(rawContent, options = {}) {
-    const operation = this.createQueue.then(() => this.createMemoInternal(rawContent, options));
+    var _a;
+    const destination = (_a = options.notebookId) != null ? _a : this.getSettings().activeMemoNotebookId;
+    const submitted = { ...options, notebookId: destination };
+    const operation = this.createQueue.then(() => this.createMemoInternal(rawContent, submitted));
     this.createQueue = operation.then(
       () => void 0,
       () => void 0
@@ -112,7 +120,7 @@ var MemoRepository = class {
     return operation;
   }
   async createMemoInternal(rawContent, options) {
-    var _a, _b;
+    var _a;
     if (!rawContent.trim() && !options.allowEmpty) {
       throw new Error("Memo \u5185\u5BB9\u4E0D\u80FD\u4E3A\u7A7A");
     }
@@ -131,7 +139,7 @@ var MemoRepository = class {
         completed: false,
         completedAt: null,
         attachments: [],
-        notebookId: (_b = options.notebookId) != null ? _b : "default",
+        notebookId: options.notebookId,
         trashedAt: null
       },
       content,
@@ -881,8 +889,19 @@ var VaultFileSuggestModal = class extends import_obsidian5.FuzzySuggestModal {
   }
 };
 function sanitizeFilename(name) {
-  const sanitized = name.trim().replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ");
-  return sanitized.slice(0, 120) || "attachment";
+  var _a, _b;
+  const sanitized = name.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").replace(/[. ]+$/, "") || "attachment";
+  const encoder = new TextEncoder();
+  const ext = (_b = (_a = sanitized.match(/\.[a-zA-Z0-9]{1,16}$/)) == null ? void 0 : _a[0]) != null ? _b : "";
+  const stem = ext ? sanitized.slice(0, -ext.length) : sanitized;
+  let bytes = ext.length;
+  let result = "";
+  for (const character of stem) {
+    bytes += encoder.encode(character).length;
+    if (bytes > 220) break;
+    result += character;
+  }
+  return (result || "attachment") + ext;
 }
 function isWordDocument(name, mime) {
   return /\.(docx?|docm|dotx?|dotm|rtf)$/i.test(name) || /msword|wordprocessingml|ms-word/i.test(mime);
@@ -911,9 +930,28 @@ function inferMime(filename) {
     xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
     ppt: "application/vnd.ms-powerpoint",
     pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    bmp: "image/bmp",
+    avif: "image/avif",
+    heic: "image/heic",
+    heif: "image/heif",
+    tif: "image/tiff",
+    tiff: "image/tiff",
+    m4v: "video/mp4",
+    mkv: "video/x-matroska",
+    avi: "video/x-msvideo",
+    flac: "audio/flac",
+    aac: "audio/aac",
     zip: "application/zip",
+    "7z": "application/x-7z-compressed",
+    rar: "application/vnd.rar",
+    gz: "application/gzip",
+    tar: "application/x-tar",
     txt: "text/plain",
-    md: "text/markdown"
+    md: "text/markdown",
+    csv: "text/csv",
+    tsv: "text/tab-separated-values",
+    json: "application/json",
+    rtf: "application/rtf"
   };
   return (_c = mimeByExtension[extension]) != null ? _c : "application/octet-stream";
 }
@@ -1341,69 +1379,6 @@ function formatFileSize(size) {
   return `${(size / 1024 / 1024).toFixed(1)} MB`;
 }
 
-// src/components/TextEditingMenu.ts
-var import_obsidian8 = require("obsidian");
-function openReadingCopyMenu(container, event) {
-  const selection = container.ownerDocument.getSelection();
-  if (!selection || selection.isCollapsed || !container.contains(selection.anchorNode) || !container.contains(selection.focusNode)) return false;
-  const text = selection.toString();
-  event.preventDefault();
-  event.stopPropagation();
-  const menu = new import_obsidian8.Menu();
-  addCopyItem(menu, text);
-  menu.showAtMouseEvent(event);
-  return true;
-}
-function addCopyItem(menu, text) {
-  menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").setDisabled(!text.length).onClick(async () => {
-    try {
-      await navigator.clipboard.writeText(text);
-    } catch (error) {
-      new import_obsidian8.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
-    }
-  }));
-}
-function openTextEditingMenu(control, event) {
-  var _a, _b;
-  event.preventDefault();
-  event.stopPropagation();
-  const start = (_a = control.selectionStart) != null ? _a : 0;
-  const end = (_b = control.selectionEnd) != null ? _b : start;
-  const hasSelection = end > start;
-  const menu = new import_obsidian8.Menu();
-  addCopyItem(menu, control.value.slice(start, end));
-  menu.addItem((item) => item.setTitle("\u7C98\u8D34").setIcon("clipboard-paste").onClick(() => void pasteSelection(control)));
-  menu.addItem((item) => item.setTitle("\u526A\u5207").setIcon("scissors").setDisabled(!hasSelection).onClick(() => void cutSelection(control)));
-  menu.showAtMouseEvent(event);
-}
-async function pasteSelection(control) {
-  var _a, _b;
-  try {
-    const text = await navigator.clipboard.readText();
-    const start = (_a = control.selectionStart) != null ? _a : control.value.length;
-    const end = (_b = control.selectionEnd) != null ? _b : start;
-    control.setRangeText(text, start, end, "end");
-    control.dispatchEvent(new Event("input"));
-    control.focus();
-  } catch (error) {
-    new import_obsidian8.Notice(`\u7C98\u8D34\u5931\u8D25\uFF1A${errorMessage(error)}`);
-  }
-}
-async function cutSelection(control) {
-  var _a, _b;
-  const start = (_a = control.selectionStart) != null ? _a : 0;
-  const end = (_b = control.selectionEnd) != null ? _b : start;
-  if (end <= start) return;
-  try {
-    await navigator.clipboard.writeText(control.value.slice(start, end));
-    control.setRangeText("", start, end, "end");
-    control.dispatchEvent(new Event("input"));
-    control.focus();
-  } catch (error) {
-    new import_obsidian8.Notice(`\u526A\u5207\u5931\u8D25\uFF1A${errorMessage(error)}`);
-  }
-}
-
 // src/components/TitleBodyInput.ts
 function bindTitleToBody(title, body) {
   const moveToBody = () => {
@@ -1433,24 +1408,92 @@ ${body.value}` : "");
     moveToBody();
   });
   title.addEventListener("paste", (rawEvent) => {
-    var _a, _b, _c, _d;
+    var _a, _b;
     const event = rawEvent;
-    const text = (_a = event.clipboardData) == null ? void 0 : _a.getData("text/plain").replace(/\r\n?/g, "\n");
-    if (!(text == null ? void 0 : text.includes("\n"))) return;
-    event.preventDefault();
-    const start = (_b = title.selectionStart) != null ? _b : title.value.length;
-    const end = (_c = title.selectionEnd) != null ? _c : start;
-    const lines = text.split("\n");
-    const first = (_d = lines.shift()) != null ? _d : "";
-    const remainder = lines.join("\n") + title.value.slice(end);
-    title.value = title.value.slice(0, start) + first;
-    body.value = remainder + (body.value ? `
-${body.value}` : "");
-    title.dispatchEvent(new Event("input", { bubbles: true }));
-    body.dispatchEvent(new Event("input", { bubbles: true }));
-    body.focus();
-    body.setSelectionRange(remainder.length, remainder.length);
+    if (pasteMultilineTitle(title, body, (_b = (_a = event.clipboardData) == null ? void 0 : _a.getData("text/plain")) != null ? _b : "")) event.preventDefault();
   });
+}
+function pasteMultilineTitle(title, body, clipboard) {
+  var _a, _b, _c;
+  const text = clipboard.replace(/\r\n?/g, "\n");
+  if (!text.includes("\n")) return false;
+  const start = (_a = title.selectionStart) != null ? _a : title.value.length;
+  const end = (_b = title.selectionEnd) != null ? _b : start;
+  const lines = text.split("\n");
+  const first = (_c = lines.shift()) != null ? _c : "";
+  const remainder = lines.join("\n") + title.value.slice(end);
+  title.value = title.value.slice(0, start) + first;
+  body.value = remainder + (body.value ? `
+${body.value}` : "");
+  title.dispatchEvent(new Event("input", { bubbles: true }));
+  body.dispatchEvent(new Event("input", { bubbles: true }));
+  body.focus();
+  body.setSelectionRange(remainder.length, remainder.length);
+  return true;
+}
+
+// src/components/TextEditingMenu.ts
+var import_obsidian8 = require("obsidian");
+function openReadingCopyMenu(container, event) {
+  const selection = container.ownerDocument.getSelection();
+  if (!selection || selection.isCollapsed || !container.contains(selection.anchorNode) || !container.contains(selection.focusNode)) return false;
+  const text = selection.toString();
+  event.preventDefault();
+  event.stopPropagation();
+  const menu = new import_obsidian8.Menu();
+  addCopyItem(menu, text);
+  menu.showAtMouseEvent(event);
+  return true;
+}
+function addCopyItem(menu, text) {
+  menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").setDisabled(!text.length).onClick(async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch (error) {
+      new import_obsidian8.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
+    }
+  }));
+}
+function openTextEditingMenu(control, event, bodyForTitle) {
+  var _a, _b;
+  event.preventDefault();
+  event.stopPropagation();
+  const start = (_a = control.selectionStart) != null ? _a : 0;
+  const end = (_b = control.selectionEnd) != null ? _b : start;
+  const hasSelection = end > start;
+  const menu = new import_obsidian8.Menu();
+  addCopyItem(menu, control.value.slice(start, end));
+  menu.addItem((item) => item.setTitle("\u7C98\u8D34").setIcon("clipboard-paste").onClick(() => void pasteSelection(control, bodyForTitle)));
+  menu.addItem((item) => item.setTitle("\u526A\u5207").setIcon("scissors").setDisabled(!hasSelection).onClick(() => void cutSelection(control)));
+  menu.showAtMouseEvent(event);
+}
+async function pasteSelection(control, bodyForTitle) {
+  var _a, _b;
+  try {
+    const text = await navigator.clipboard.readText();
+    if (bodyForTitle && pasteMultilineTitle(control, bodyForTitle, text)) return;
+    const start = (_a = control.selectionStart) != null ? _a : control.value.length;
+    const end = (_b = control.selectionEnd) != null ? _b : start;
+    control.setRangeText(text, start, end, "end");
+    control.dispatchEvent(new Event("input"));
+    control.focus();
+  } catch (error) {
+    new import_obsidian8.Notice(`\u7C98\u8D34\u5931\u8D25\uFF1A${errorMessage(error)}`);
+  }
+}
+async function cutSelection(control) {
+  var _a, _b;
+  const start = (_a = control.selectionStart) != null ? _a : 0;
+  const end = (_b = control.selectionEnd) != null ? _b : start;
+  if (end <= start) return;
+  try {
+    await navigator.clipboard.writeText(control.value.slice(start, end));
+    control.setRangeText("", start, end, "end");
+    control.dispatchEvent(new Event("input"));
+    control.focus();
+  } catch (error) {
+    new import_obsidian8.Notice(`\u526A\u5207\u5931\u8D25\uFF1A${errorMessage(error)}`);
+  }
 }
 
 // src/components/EditorSizing.ts
@@ -1536,7 +1579,7 @@ var MemoCard = class {
     owner.registerDomEvent(this.article, "contextmenu", (event) => {
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-        openTextEditingMenu(target, event);
+        openTextEditingMenu(target, event, target === this.editorTitleInput ? this.editorTextarea : void 0);
         return;
       }
       if (openReadingCopyMenu(this.display, event)) return;
@@ -2035,7 +2078,7 @@ var MemoComposer = class {
       event.preventDefault();
       this.addPendingExternalFiles(files);
     });
-    owner.registerDomEvent(this.titleInput, "contextmenu", (event) => openTextEditingMenu(this.titleInput, event));
+    owner.registerDomEvent(this.titleInput, "contextmenu", (event) => openTextEditingMenu(this.titleInput, event, this.textarea));
     owner.registerDomEvent(this.textarea, "contextmenu", (event) => openTextEditingMenu(this.textarea, event));
     owner.registerDomEvent(this.textarea, "scroll", () => {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
@@ -2547,8 +2590,9 @@ var MemosView = class extends import_obsidian13.ItemView {
     this.refreshSequence = 0;
     this.isDraggingDivider = false;
     this.showTrash = false;
-    this.expandedNotebookId = "default";
     this.unlockedNotebookIds = /* @__PURE__ */ new Set(["default"]);
+    this.activeNotebookId = plugin.settings.activeMemoNotebookId;
+    this.expandedNotebookId = this.activeNotebookId;
     if ((_a = plugin.settings.manualMemoOrder) == null ? void 0 : _a.length) this.sortOption = "manual";
   }
   getViewType() {
@@ -2561,9 +2605,11 @@ var MemosView = class extends import_obsidian13.ItemView {
     return "book-open";
   }
   async onOpen() {
-    const activeNotebook = this.plugin.settings.memoNotebooks.find((item) => item.id === this.plugin.settings.activeMemoNotebookId);
+    const activeNotebook = this.plugin.settings.memoNotebooks.find((item) => item.id === this.activeNotebookId);
     if ((activeNotebook == null ? void 0 : activeNotebook.private) && !this.unlockedNotebookIds.has(activeNotebook.id)) {
-      this.plugin.settings.activeMemoNotebookId = "default";
+      this.activeNotebookId = "default";
+      this.expandedNotebookId = this.activeNotebookId;
+      this.plugin.settings.activeMemoNotebookId = this.activeNotebookId;
       await this.plugin.saveSettings();
     }
     this.contentEl.empty();
@@ -2785,6 +2831,7 @@ var MemosView = class extends import_obsidian13.ItemView {
       composerHost,
       this.plugin.repository,
       async (memo) => {
+        if (this.activeNotebookId !== memo.notebookId) return;
         this.mobileDetail = true;
         await this.refresh(memo.file.path);
       },
@@ -2793,7 +2840,12 @@ var MemosView = class extends import_obsidian13.ItemView {
         attachmentService: this.plugin.attachmentService,
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
-        getNotebookId: () => this.isMobileLayout() ? this.plugin.settings.activeMemoNotebookId : void 0
+        getNotebookId: () => {
+          if (!this.plugin.settings.memoNotebooks.some((book) => book.id === this.activeNotebookId)) {
+            throw new Error("\u5F53\u524D\u5907\u5FD8\u5F55\u5DF2\u5220\u9664\uFF0C\u8BF7\u9009\u62E9\u8981\u4FDD\u5B58\u5230\u7684\u5907\u5FD8\u5F55\u540E\u91CD\u8BD5");
+          }
+          return this.activeNotebookId;
+        }
       }
     );
     const detailFeed = this.detailContentEl.createDiv({ cls: "obsidian-memos-detail-feed" });
@@ -2820,7 +2872,7 @@ var MemosView = class extends import_obsidian13.ItemView {
     var _a;
     if (!this.mobileNotebookList) return;
     this.mobileNotebookList.empty();
-    const activeId = this.plugin.settings.activeMemoNotebookId;
+    const activeId = this.activeNotebookId;
     const notebooks = [...this.plugin.settings.memoNotebooks].sort((left, right) => Number(right.pinned === true) - Number(left.pinned === true));
     for (const notebook of notebooks) {
       const row = this.mobileNotebookList.createDiv({ cls: "obsidian-memos-mobile-library__row" });
@@ -2853,7 +2905,11 @@ var MemosView = class extends import_obsidian13.ItemView {
       (0, import_obsidian13.setIcon)(expandButton, expanded ? "chevron-down" : "chevron-right");
       this.registerDomEvent(expandButton, "click", (event) => {
         event.stopPropagation();
-        this.expandedNotebookId = expanded ? "" : notebook.id;
+        if (!expanded) {
+          void this.selectNotebook(notebook, this.mobileDetail);
+          return;
+        }
+        this.expandedNotebookId = "";
         this.renderMobileLibrary();
       });
       if (expanded) this.renderNotebookContents(row, notebook.id);
@@ -2891,11 +2947,11 @@ var MemosView = class extends import_obsidian13.ItemView {
       button.createDiv({ cls: "obsidian-memos-mobile-library__content-summary", text: preview });
       this.registerDomEvent(button, "click", async () => {
         var _a;
-        if (this.plugin.settings.activeMemoNotebookId !== notebookId) {
+        if (this.activeNotebookId !== notebookId) {
           const notebook = this.plugin.settings.memoNotebooks.find((entry) => entry.id === notebookId);
           if (!notebook) return;
           await this.selectNotebook(notebook);
-          if (this.plugin.settings.activeMemoNotebookId !== notebookId) return;
+          if (this.activeNotebookId !== notebookId) return;
         }
         if (this.showTrash || !this.memos.some((entry) => entry.file.path === memo.file.path)) {
           this.showTrash = false;
@@ -2938,7 +2994,7 @@ var MemosView = class extends import_obsidian13.ItemView {
       passwordHash
     };
     this.plugin.settings.memoNotebooks.push(notebook);
-    if (!isPrivate) this.unlockedNotebookIds.add(notebook.id);
+    this.unlockedNotebookIds.add(notebook.id);
     await this.plugin.saveSettings();
     this.renderMobileLibrary();
     await this.selectNotebook(notebook);
@@ -2970,8 +3026,9 @@ var MemosView = class extends import_obsidian13.ItemView {
     if (!fallback) return;
     await this.plugin.repository.moveMemosToNotebook(notebook.id, fallback.id);
     this.plugin.settings.memoNotebooks = this.plugin.settings.memoNotebooks.filter((item) => item.id !== notebook.id);
+    if (this.activeNotebookId === notebook.id) this.activeNotebookId = fallback.id;
     if (this.plugin.settings.activeMemoNotebookId === notebook.id) this.plugin.settings.activeMemoNotebookId = fallback.id;
-    this.expandedNotebookId = fallback.id;
+    this.expandedNotebookId = this.activeNotebookId;
     await this.plugin.saveSettings();
     this.renderMobileLibrary();
     await this.refresh();
@@ -2981,7 +3038,7 @@ var MemosView = class extends import_obsidian13.ItemView {
       new NotebookNameModal(this.app, title, resolve, initial).open();
     });
   }
-  async selectNotebook(notebook) {
+  async selectNotebook(notebook, showDetail = true) {
     if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
       if (!notebook.passwordHash) {
         const password = await requestText(this.app, `\u4E3A\u201C${notebook.name}\u201D\u8BBE\u7F6E\u5BC6\u7801`, "\u8BF7\u8F93\u5165\u8BBF\u95EE\u5BC6\u7801", "password");
@@ -3002,9 +3059,11 @@ var MemosView = class extends import_obsidian13.ItemView {
       }
       this.unlockedNotebookIds.add(notebook.id);
     }
+    this.activeNotebookId = notebook.id;
     this.plugin.settings.activeMemoNotebookId = notebook.id;
+    this.expandedNotebookId = notebook.id;
     this.showTrash = false;
-    this.mobileDetail = true;
+    this.mobileDetail = showDetail;
     this.searchQuery = "";
     await this.plugin.saveSettings();
     this.renderMobileLibrary();
@@ -3111,7 +3170,7 @@ var MemosView = class extends import_obsidian13.ItemView {
     const query = this.searchQuery.trim().toLocaleLowerCase();
     const selectedTag = this.plugin.settings.selectedTag;
     const selectedFilter = this.plugin.settings.selectedFilter;
-    const activeNotebookId = this.plugin.settings.activeMemoNotebookId;
+    const activeNotebookId = this.activeNotebookId;
     const filterByNotebook = true;
     this.memos = this.allMemos.filter((memo) => {
       if (filterByNotebook && !this.showTrash && memo.notebookId !== activeNotebookId) return false;
@@ -3281,7 +3340,7 @@ var MemosView = class extends import_obsidian13.ItemView {
     const menu = new import_obsidian13.Menu();
     menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").onClick(async () => {
       try {
-        await navigator.clipboard.writeText(memo.content);
+        await navigator.clipboard.writeText(memoClipboardText(memo.content));
         new import_obsidian13.Notice("\u5DF2\u590D\u5236");
       } catch (e) {
         new import_obsidian13.Notice("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5");

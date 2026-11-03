@@ -66,6 +66,13 @@ export function joinMemoContent(title: string, body: string): string {
   return body ? `${normalizedTitle}\n\n${body}` : normalizedTitle;
 }
 
+/** Flatten the two editor fields for plain-text copy, without the storage separator. */
+export function memoClipboardText(content: string): string {
+  const { title, body } = splitMemoContent(content);
+  const firstParagraph = body.replace(/^(?:[^\S\n]*\n)+/, "");
+  return [title.trim() ? title : "", firstParagraph].filter(Boolean).join("\n");
+}
+
 export function extractExternalUrls(content: string): string[] {
   const matches = content.match(/https?:\/\/[^\s<>()\x5B\x5D{}"']+/gi) ?? [];
   return Array.from(new Set(matches.map((url) => url.replace(/[.,;:!?]+$/, ""))));

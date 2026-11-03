@@ -26,19 +26,23 @@ export function bindTitleToBody(title: HTMLInputElement | HTMLTextAreaElement, b
   });
   title.addEventListener("paste", (rawEvent) => {
     const event = rawEvent as ClipboardEvent;
-    const text = event.clipboardData?.getData("text/plain").replace(/\r\n?/g, "\n");
-    if (!text?.includes("\n")) return;
-    event.preventDefault();
-    const start = title.selectionStart ?? title.value.length;
-    const end = title.selectionEnd ?? start;
-    const lines = text.split("\n");
-    const first = lines.shift() ?? "";
-    const remainder = lines.join("\n") + title.value.slice(end);
-    title.value = title.value.slice(0, start) + first;
-    body.value = remainder + (body.value ? `\n${body.value}` : "");
-    title.dispatchEvent(new Event("input", { bubbles: true }));
-    body.dispatchEvent(new Event("input", { bubbles: true }));
-    body.focus();
-    body.setSelectionRange(remainder.length, remainder.length);
+    if (pasteMultilineTitle(title, body, event.clipboardData?.getData("text/plain") ?? "")) event.preventDefault();
   });
+}
+
+export function pasteMultilineTitle(title: HTMLInputElement | HTMLTextAreaElement, body: HTMLTextAreaElement, clipboard: string): boolean {
+  const text = clipboard.replace(/\r\n?/g, "\n");
+  if (!text.includes("\n")) return false;
+  const start = title.selectionStart ?? title.value.length;
+  const end = title.selectionEnd ?? start;
+  const lines = text.split("\n");
+  const first = lines.shift() ?? "";
+  const remainder = lines.join("\n") + title.value.slice(end);
+  title.value = title.value.slice(0, start) + first;
+  body.value = remainder + (body.value ? `\n${body.value}` : "");
+  title.dispatchEvent(new Event("input", { bubbles: true }));
+  body.dispatchEvent(new Event("input", { bubbles: true }));
+  body.focus();
+  body.setSelectionRange(remainder.length, remainder.length);
+  return true;
 }
