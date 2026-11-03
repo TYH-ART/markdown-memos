@@ -1,5 +1,6 @@
 import { App, ItemView, Menu, Modal, Notice, Platform, setIcon, WorkspaceLeaf } from "obsidian";
 import type ObsidianMemosPlugin from "../main";
+import { bindSidebarDrag, mergeVisibleOrder } from "../components/MemoReorder";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
 import { formatListDate, getMemoListTitle, getSummary, MemoList } from "../components/MemoList";
@@ -384,7 +385,7 @@ export class MemosView extends ItemView {
       contents.createDiv({ cls: "obsidian-memos-mobile-library__contents-empty", text: "暂无内容" });
       return;
     }
-    for (const memo of this.sidebarOrder(memos).slice(0, 30)) {
+    for (const memo of this.sidebarOrder(memos)) {
       const button = contents.createEl("button", {
         cls: "obsidian-memos-mobile-library__content-item",
         attr: { type: "button" },
@@ -777,73 +778,17 @@ export class MemosView extends ItemView {
     this.bindArrangement(row, row, memo.pinned ? "pinned" : "memo", keys => {
       const field = memo.pinned ? "pinnedMemoOrder" : "sidebarMemoOrder";
       const all = this.sidebarOrder(this.allMemos.filter(entry => entry.pinned === memo.pinned));
-      const visible = new Set(keys);
-      this.plugin.settings[field] = all.map(entry => visible.has(entry.file.path) ? keys.shift()! : entry.file.path);
+      this.plugin.settings[field] = mergeVisibleOrder(all.map(entry => entry.file.path), keys);
     });
   }
 
   private bindArrangement(handle: HTMLElement, row: HTMLElement, group: string, save: (keys: string[]) => void): void {
-    const host = row.parentElement!;
-    row.dataset.sortGroup = group;
-    let timer: number | undefined;
-    let startY = 0;
-    let dragging = false;
-    let moved = false;
-    let alreadyArranging = false;
-    const clear = () => window.clearTimeout(timer);
-    handle.addEventListener("pointerdown", event => {
-      if (event.button !== 0 || !event.isPrimary) return;
-      alreadyArranging = host.hasClass("is-arranging");
-      moved = false;
-      startY = event.clientY;
-      const begin = () => {
-        dragging = true;
-        host.addClass("is-arranging");
-        handle.setPointerCapture(event.pointerId);
-      };
-      if (host.hasClass("is-arranging")) begin();
-      else timer = window.setTimeout(begin, 480);
+    bindSidebarDrag(handle, row, group, keys => {
+      save(keys);
+      void this.plugin.saveSettings().catch(() => new Notice("排序保存失败，请重试"));
+      this.renderMobileLibrary();
+      this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
     });
-    handle.addEventListener("pointermove", event => {
-      if (!dragging) {
-        if (Math.abs(event.clientY - startY) > 7) clear();
-        return;
-      }
-      const target = host.ownerDocument.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-sort-key]");
-      if (!target || target === row || target.parentElement !== host || target.dataset.sortGroup !== group) return;
-      const after = Boolean(row.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
-      const previousTop = target.getBoundingClientRect().top;
-      host.insertBefore(row, after ? target.nextSibling : target);
-      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
-        const offset = previousTop - target.getBoundingClientRect().top;
-        target.animate([{ translate: `0 ${offset}px` }, { translate: "0 0" }], { duration: 170, easing: "ease-out" });
-      }
-      handle.setPointerCapture(event.pointerId);
-      moved = true;
-    });
-    handle.addEventListener("pointerleave", () => { if (!dragging) clear(); });
-    const finish = () => {
-      clear();
-      if (dragging && moved) {
-        const keys = Array.from(host.children).filter(el => (el as HTMLElement).dataset.sortGroup === group)
-          .map(el => (el as HTMLElement).dataset.sortKey!);
-        save(keys);
-        void this.plugin.saveSettings();
-        host.removeClass("is-arranging");
-        this.renderMobileLibrary();
-        this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
-      }
-      dragging = false;
-    };
-    handle.addEventListener("pointerup", finish);
-    handle.addEventListener("pointercancel", finish);
-    handle.addEventListener("click", event => {
-      if (host.hasClass("is-arranging") || moved) {
-        event.preventDefault();
-        event.stopImmediatePropagation();
-        if (alreadyArranging && !moved) host.removeClass("is-arranging");
-      }
-    }, true);
   }
 
   private sortMemos(memos: MemoRecord[]): MemoRecord[] {

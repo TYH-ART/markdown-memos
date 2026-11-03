@@ -108,34 +108,60 @@ test('Desktop export preserves every binary byte including nulls and high bytes'
     const dest = path.join(dir, '中文附件.zip');
     const bytes = Uint8Array.from({ length: 65537 }, (_, i) => i % 256);
     const { exportBinaryFile } = load('src/services/FileExport.ts', {
-      obsidian: { Platform: { isDesktop: true } },
+      obsidian: { Platform: { isDesktop: true }, Notice: class {} },
       electron: { remote: { dialog: { showSaveDialog: async () => ({ filePath: dest }) } } },
     });
     await exportBinaryFile({}, bytes.buffer, '中文附件.zip', 'application/zip');
     assert.deepEqual(await readFile(dest), Buffer.from(bytes));
   } finally { await rm(dir, { recursive: true, force: true }); }
 });
+test('Configured desktop download folder saves without overwriting or loading Electron', async () => {
+  const dir = await mkdtemp(path.join(tmpdir(), 'memos-default-download-'));
+  try {
+    const { exportBinaryFile } = load('src/services/FileExport.ts', {
+      obsidian: { Platform: { isDesktop: true }, Notice: class {} },
+    });
+    const app = { loadLocalStorage: () => dir };
+    await exportBinaryFile(app, new Uint8Array([1]).buffer, 'report.pdf', '');
+    await exportBinaryFile(app, new Uint8Array([2]).buffer, 'report.pdf', '');
+    assert.deepEqual(await readFile(path.join(dir, 'report.pdf')), Buffer.from([1]));
+    assert.deepEqual(await readFile(path.join(dir, 'report (1).pdf')), Buffer.from([2]));
+  } finally { await rm(dir, { recursive: true, force: true }); }
+});
 test('Canceling export never writes a file', async () => {
   let written = false;
   const { exportBinaryFile } = load('src/services/FileExport.ts', {
-    obsidian: { Platform: { isDesktop: true } },
+    obsidian: { Platform: { isDesktop: true }, Notice: class {} },
     electron: { remote: { dialog: { showSaveDialog: async () => ({ canceled: true }) } } },
     'fs/promises': { writeFile: () => { written = true; } },
   });
   await exportBinaryFile({}, new ArrayBuffer(0), 'file.zip', 'application/zip');
   assert.equal(written, false);
 });
+test('Mobile default download folder saves into the vault without a share dialog', async () => {
+  const files = new Set(['Downloads', 'Downloads/photo.png']);
+  const written = [];
+  const app = { loadLocalStorage: () => 'Downloads', vault: {
+    getAbstractFileByPath: name => files.has(name),
+    createBinary: (name, data) => written.push([name, Array.from(new Uint8Array(data))]),
+  } };
+  const { exportBinaryFile } = load('src/services/FileExport.ts', {
+    obsidian: { Platform: { isDesktop: false }, normalizePath: path => path, Notice: class {} },
+  });
+  await exportBinaryFile(app, Uint8Array.from([0, 255]).buffer, 'photo.png', 'image/png');
+  assert.deepEqual(written, [['Downloads/photo (1).png', [0, 255]]]);
+});
 test('Mobile native export passes base64 binary and shares the resulting file URI', async () => {
   const bytes = Uint8Array.from([80, 75, 3, 4, 0, 128, 255]);
   let options, shared;
   const { exportBinaryFile } = load('src/services/FileExport.ts', {
-    obsidian: { Platform: { isDesktop: false }, arrayBufferToBase64: data => Buffer.from(data).toString('base64') },
+    obsidian: { Platform: { isDesktop: false }, FuzzySuggestModal: class { setPlaceholder() {} open() { this.onChooseItem(this.getItems()[0]); } }, arrayBufferToBase64: data => Buffer.from(data).toString('base64') },
     window: { Capacitor: { Plugins: {
       Filesystem: { writeFile: async o => { options = o; return { uri: 'file:///cache/file.zip' }; } },
       Share: { share: async o => { shared = o; } },
     } } },
   });
-  await exportBinaryFile({}, bytes.buffer, 'file.zip', 'application/zip');
+  await exportBinaryFile({ vault: { getAllFolders: () => [] } }, bytes.buffer, 'file.zip', 'application/zip');
   assert.deepEqual(Buffer.from(options.data, 'base64'), Buffer.from(bytes));
   assert.equal(options.encoding, undefined);
   assert.equal(options.directory, 'CACHE');
@@ -145,4 +171,125 @@ test('Display cards omit the plugin action menu and generated URL list', () => {
   const { MemoCard } = load('src/components/MemoCard.ts', { obsidian: {} });
   assert.equal(MemoCard.prototype.openMenu, undefined);
   assert.equal(MemoCard.prototype.renderDetectedLinks, undefined);
+});
+
+test('Sidebar drop commits once on release; touch scrolling and canceled gestures do not reorder', () => {
+  const { bindSidebarDrag } = load('src/components/MemoReorder.ts');
+  const doc = new EventTarget();
+  const win = new EventTarget();
+  let hold;
+  Object.assign(win, { setTimeout(fn) { hold = fn; return 1; }, clearTimeout() { hold = undefined; },
+    requestAnimationFrame() { return 1; }, cancelAnimationFrame() {} });
+  doc.defaultView = win;
+  const classes = () => { const values = new Set(); return { addClass: n => values.add(n),
+    removeClass: (...names) => names.forEach(n => values.delete(n)), hasClass: n => values.has(n) }; };
+  const host = { ...classes(), children: [], parentElement: null, contains: n => host.children.includes(n) };
+  for (const [i, key] of ['a', 'b', 'c'].entries()) {
+    const row = Object.assign(new EventTarget(), classes(), { dataset: { sortKey: key, sortGroup: 'memo' },
+      ownerDocument: doc, isConnected: true, parentElement: host, closest() { return this; },
+      setPointerCapture() {}, hasPointerCapture: () => true, releasePointerCapture() {},
+      getBoundingClientRect: () => ({ top: i * 40, bottom: (i + 1) * 40, height: 40 }) });
+    host.children.push(row);
+  }
+  const [first, , last] = host.children;
+  doc.elementFromPoint = () => last;
+  const saved = [];
+  bindSidebarDrag(first, first, 'memo', keys => saved.push(keys));
+  const down = { button: 0, pointerId: 7, isPrimary: true, clientX: 15, clientY: 10 };
+  const moved = { ...down, clientY: 115, pointerType: 'touch' };
+  send(first, 'pointerdown', down);
+  send(doc, 'pointermove', moved);
+  send(doc, 'pointerup', moved);
+  assert.equal(hold, undefined);
+  assert.equal(saved.length, 0);
+  send(first, 'pointerdown', down);
+  hold();
+  send(doc, 'pointercancel', moved);
+  assert.equal(saved.length, 0);
+  for (const pointerType of ['mouse', 'touch']) {
+    send(first, 'pointerdown', down);
+    if (pointerType === 'touch') hold();
+    send(doc, 'pointermove', { ...moved, pointerType });
+    send(doc, 'pointerup', moved);
+    assert.deepEqual(saved.at(-1), ['b', 'c', 'a']);
+    assert.equal(host.hasClass('is-arranging'), false);
+  }
+  assert.equal(saved.length, 2);
+});
+
+test('Desktop upload remembers the source directory across picks and preserves native file paths', async () => {
+  const source = path.join(path.resolve('photos'), 'image.png');
+  let seed, lastOptions, cancel = false;
+  const app = {
+    loadLocalStorage() { return seed; },
+    saveLocalStorage(key, value) { seed = value; },
+  };
+  const { pickUploadFiles, getDesktopUploadPath } = load('src/services/UploadPicker.ts', {
+    obsidian: { Platform: { isDesktopApp: true } },
+    electron: { remote: { dialog: { showOpenDialog(options) {
+      lastOptions = options;
+      return { canceled: cancel, filePaths: cancel ? [] : [source] };
+    } } } },
+    'fs/promises': { readFile: async () => Uint8Array.from([0, 255, 1]) },
+  });
+  const [file] = await pickUploadFiles(app, '*/*', () => 'image/png');
+  assert.equal(getDesktopUploadPath(file), source);
+  assert.equal(file.type, 'image/png');
+  assert.deepEqual([...new Uint8Array(await file.arrayBuffer())], [0, 255, 1]);
+  cancel = true;
+  assert.deepEqual(await pickUploadFiles(app, '*/*', () => ''), []);
+  assert.equal(lastOptions.defaultPath, path.dirname(source));
+  assert.equal(seed, path.dirname(source));
+});
+
+test('Reading Copy uses the editor label and copies exactly the text selected before the menu opened', async () => {
+  let copy, title, icon, copied;
+  class Menu {
+    addItem(configure) {
+      configure({ setTitle(value) { title = value; return this; }, setIcon(value) { icon = value; return this; },
+        setDisabled() { return this; }, onClick(callback) { copy = callback; } });
+    }
+    showAtMouseEvent() {}
+  }
+  const api = load('src/components/TextEditingMenu.ts', {
+    obsidian: { Menu }, navigator: { clipboard: { async writeText(text) { copied = text; } } },
+  });
+  let text = '  选择\n部分 ';
+  const node = {};
+  const selected = { isCollapsed: false, anchorNode: node, focusNode: node, toString: () => text };
+  const container = { ownerDocument: { getSelection: () => selected }, contains: n => n === node };
+  const event = new Event('contextmenu', { cancelable: true });
+  assert.equal(api.openReadingCopyMenu(container, event), true);
+  assert.ok(event.defaultPrevented);
+  assert.equal(title, '复制');
+  assert.equal(icon, 'copy');
+  text = '';
+  await copy();
+  assert.equal(copied, '  选择\n部分 ');
+  selected.focusNode = {};
+  assert.equal(api.openReadingCopyMenu(container, event), false);
+});
+
+test('Image and Word attachments open without creating an Obsidian leaf', async () => {
+  class TFile {}
+  class Modal {
+    constructor() {
+      this.modalEl = { addClass() {} };
+      this.contentEl = { createEl(tag, options) { assert.equal(tag, 'img'); assert.equal(options.attr.src, 'image-preview'); } };
+    }
+    setTitle() {}
+    open() { previewed = true; }
+  }
+  let previewed = false, opened;
+  const file = Object.assign(new TFile(), { path: 'files/照片.png', name: '照片.png' });
+  const app = { vault: { getAbstractFileByPath: () => file, getResourcePath: () => 'image-preview' },
+    openWithDefaultApp: async path => { opened = path; } };
+  const { AttachmentService } = load('src/services/AttachmentService.ts', { obsidian: { TFile, Modal, FuzzySuggestModal: class {} } });
+  const service = new AttachmentService(app, {}, () => ({}));
+  await service.openAttachment({ path: file.path, name: file.name, mime: 'image/png' });
+  assert.ok(previewed);
+  file.path = 'files/report.DOCX';
+  file.name = 'report.DOCX';
+  await service.openAttachment({ path: file.path, name: file.name, mime: 'application/octet-stream' });
+  assert.equal(opened, file.path);
 });

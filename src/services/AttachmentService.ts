@@ -1,7 +1,8 @@
-import { App, FuzzySuggestModal, normalizePath, Notice, TFile, TFolder } from "obsidian";
+import { App, FuzzySuggestModal, Modal, normalizePath, Notice, TFile, TFolder } from "obsidian";
 import type { MemoAttachment, ObsidianMemosSettings } from "../types";
 import { errorMessage, formatMemoBasename, normalizeMemoFolder } from "../utils";
 import type { MemoRepository } from "./MemoRepository";
+import { pickUploadFiles } from "./UploadPicker";
 import { exportBinaryFile } from "./FileExport";
 
 export class AttachmentService {
@@ -22,7 +23,7 @@ export class AttachmentService {
   }
 
   public pickExternalAttachments(accept = "*/*"): Promise<File[]> {
-    return this.pickExternalFiles(accept);
+    return pickUploadFiles(this.app, accept, inferMime);
   }
 
   public async addExternalFiles(memoFile: TFile, files: File[]): Promise<number> {
@@ -86,7 +87,29 @@ export class AttachmentService {
       new Notice(`附件不存在：${attachment.name}`);
       return;
     }
-    await this.app.workspace.getLeaf(true).openFile(file);
+    if (attachment.mime.startsWith("image/") || inferMime(file.name).startsWith("image/")) {
+      this.previewImage(this.app.vault.getResourcePath(file), attachment.name);
+      return;
+    }
+    try {
+      if (isWordDocument(attachment.name, attachment.mime)) {
+        const app = this.app as App & { openWithDefaultApp?: (vaultPath: string) => Promise<void> };
+        if (!app.openWithDefaultApp) throw new Error("当前 Obsidian 版本无法调用系统应用");
+        await app.openWithDefaultApp(file.path);
+      } else {
+        await this.app.workspace.getLeaf(true).openFile(file);
+      }
+    } catch (error) {
+      new Notice(`打开失败：${errorMessage(error)}`);
+    }
+  }
+
+  public previewImage(url: string, name: string): void {
+    const modal = new Modal(this.app);
+    modal.setTitle(name);
+    modal.modalEl.addClass("obsidian-memos-image-preview");
+    modal.contentEl.createEl("img", { attr: { src: url, alt: name } });
+    modal.open();
   }
 
   public getResourceUrl(attachment: MemoAttachment): string | undefined {
@@ -134,25 +157,6 @@ export class AttachmentService {
   public async isAttachmentReferenced(path: string, excludingMemoPath?: string): Promise<boolean> {
     const memos = await this.repository.getMemos();
     return memos.some((memo) => memo.file.path !== excludingMemoPath && memo.attachments.some((attachment) => attachment.path === path));
-  }
-
-  private pickExternalFiles(accept = "*/*"): Promise<File[]> {
-    return new Promise((resolve) => {
-      const input = this.app.workspace.containerEl.createEl("input");
-      input.type = "file";
-      input.multiple = true;
-      input.accept = accept;
-      let resolved = false;
-      const finish = (files: File[]): void => {
-        if (resolved) return;
-        resolved = true;
-        input.remove();
-        resolve(files);
-      };
-      input.addEventListener("change", () => finish(Array.from(input.files ?? [])), { once: true });
-      input.addEventListener("cancel", () => finish([]), { once: true });
-      input.click();
-    });
   }
 
   private chooseVaultFile(title: string, predicate: (file: TFile) => boolean): Promise<TFile | undefined> {
@@ -227,6 +231,11 @@ class VaultFileSuggestModal extends FuzzySuggestModal<TFile> {
 function sanitizeFilename(name: string): string {
   const sanitized = name.trim().replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ");
   return sanitized.slice(0, 120) || "attachment";
+}
+
+export function isWordDocument(name: string, mime: string): boolean {
+  return /\.(docx?|docm|dotx?|dotm|rtf)$/i.test(name)
+    || /msword|wordprocessingml|ms-word/i.test(mime);
 }
 
 export function inferMime(filename: string): string {

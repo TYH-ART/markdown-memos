@@ -75,3 +75,112 @@ export function armMemoReorder(host: HTMLElement, item: HTMLElement, commit: (pa
   }, options);
   return () => finish(false);
 }
+
+/** Keep the pressed DOM node in place until release so touch capture survives the drag. */
+export function bindSidebarDrag(handle: HTMLElement, row: HTMLElement, group: string, save: (keys: string[]) => void): void {
+  const host = row.parentElement!;
+  const doc = row.ownerDocument;
+  const win = doc.defaultView!;
+  row.dataset.sortGroup = group;
+  let dragging = false;
+  let suppressClick = false;
+  handle.addEventListener("touchmove", event => {
+    if (dragging && event.cancelable) event.preventDefault();
+  }, { passive: false });
+  handle.addEventListener("click", event => {
+    if (!suppressClick) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    suppressClick = false;
+  }, true);
+  handle.addEventListener("pointerdown", down => {
+    if (!down.isPrimary || down.button !== 0) return;
+    suppressClick = false;
+    const controller = new AbortController();
+    const options = { signal: controller.signal };
+    const armed = host.hasClass("is-arranging");
+    let timer = 0;
+    let frame = 0;
+    let y = down.clientY;
+    let x = down.clientX;
+    let target: HTMLElement | undefined;
+    let after = false;
+    const peers = Array.from(host.children).filter((el): el is HTMLElement =>
+      (el as HTMLElement).dataset.sortGroup === group);
+    let scroller: HTMLElement | null = host;
+    while (scroller && !(scroller.scrollHeight > scroller.clientHeight &&
+      /auto|scroll/.test(win.getComputedStyle(scroller).overflowY))) scroller = scroller.parentElement;
+    const mark = () => {
+      target?.removeClass("is-drop-before", "is-drop-after");
+      target = undefined;
+      const hit = doc.elementFromPoint(x, y);
+      if (!hit || !host.contains(hit)) return;
+      const hovered = (hit as HTMLElement).closest<HTMLElement>("[data-sort-key]");
+      if (hovered?.parentElement === host && hovered.dataset.sortGroup !== group) return;
+      const candidate = peers.find(peer => y < peer.getBoundingClientRect().bottom) ?? peers[peers.length - 1];
+      if (!candidate || candidate === row) return;
+      const bounds = candidate.getBoundingClientRect();
+      target = candidate;
+      after = y >= bounds.top + bounds.height / 2;
+      target.addClass(after ? "is-drop-after" : "is-drop-before");
+    };
+    const tick = () => {
+      if (!row.isConnected) { finish(false); return; }
+      if (scroller) {
+        const bounds = scroller.getBoundingClientRect();
+        if (y < bounds.top + 30) scroller.scrollTop -= 7;
+        else if (y > bounds.bottom - 30) scroller.scrollTop += 7;
+      }
+      mark();
+      frame = win.requestAnimationFrame(tick);
+    };
+    const begin = () => {
+      if (dragging) return;
+      if (!row.isConnected) { finish(false); return; }
+      dragging = true;
+      suppressClick = true;
+      host.addClass("is-arranging");
+      row.addClass("is-drag-source");
+      handle.setPointerCapture(down.pointerId);
+      frame = win.requestAnimationFrame(tick);
+    };
+    const finish = (drop: boolean) => {
+      win.clearTimeout(timer);
+      win.cancelAnimationFrame(frame);
+      controller.abort();
+      if (!dragging) return;
+      dragging = false;
+      host.removeClass("is-arranging");
+      row.removeClass("is-drag-source");
+      target?.removeClass("is-drop-before", "is-drop-after");
+      if (handle.hasPointerCapture(down.pointerId)) handle.releasePointerCapture(down.pointerId);
+      if (drop && target && row.isConnected) {
+        const sorted = peers.filter(peer => peer !== row);
+        sorted.splice(sorted.indexOf(target) + Number(after), 0, row);
+        if (sorted.some((peer, index) => peer !== peers[index])) save(sorted.map(peer => peer.dataset.sortKey!));
+      }
+    };
+    if (armed) begin();
+    else timer = win.setTimeout(begin, 420);
+    doc.addEventListener("pointermove", event => {
+      if (event.pointerId !== down.pointerId) return;
+      x = event.clientX;
+      y = event.clientY;
+      if (!dragging && Math.hypot(x - down.clientX, y - down.clientY) > 6) {
+        if (event.pointerType === "mouse") begin();
+        else finish(false);
+      }
+      if (dragging) event.preventDefault();
+    }, { ...options, passive: false });
+    doc.addEventListener("pointerup", event => {
+      if (event.pointerId !== down.pointerId) return;
+      if (dragging) { x = event.clientX; y = event.clientY; mark(); }
+      finish(true);
+    }, options);
+    doc.addEventListener("pointercancel", event => {
+      if (event.pointerId === down.pointerId) finish(false);
+    }, options);
+    doc.addEventListener("keydown", event => { if (event.key === "Escape") finish(false); }, options);
+    win.addEventListener("blur", () => finish(false), options);
+  });
+}

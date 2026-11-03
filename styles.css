@@ -2243,24 +2243,27 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   gap: 4px;
 }
 
-.obsidian-memos-composer__task {
+.obsidian-memos-composer__tools button.obsidian-memos-composer__task {
   display: inline-flex;
-  width: 26px;
-  min-width: 26px;
-  height: 26px;
-  min-height: 26px;
+  width: 28px;
+  height: 28px;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 999px;
+  padding: 4px;
+  border: 0;
+  border-radius: var(--radius-s);
   background: transparent;
   color: var(--text-muted);
-  font-size: var(--font-ui-smaller);
+  box-shadow: none;
 }
 
-.obsidian-memos-composer__task.is-active {
-  border-color: var(--interactive-accent);
+.obsidian-memos-composer__task svg,
+.obsidian-memos-composer__attachment-button svg {
+  width: 18px;
+  height: 18px;
+}
+
+.obsidian-memos-composer__tools button.obsidian-memos-composer__task.is-active {
   background: color-mix(in srgb, var(--interactive-accent) 14%, transparent);
   color: var(--text-accent);
 }
@@ -2701,16 +2704,42 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .obsidian-memos-view button.obsidian-memos-mobile-library__trash {
   box-shadow: none !important;
 }
-.is-arranging > [data-sort-key] {
-  touch-action: none;
-  cursor: grab;
-  animation: memos-arrange-wiggle .28s ease-in-out infinite alternate;
+.obsidian-memos-view .obsidian-memos-mobile-library button,
+.obsidian-memos-view .obsidian-memos-list-row button,
+.obsidian-memos-view .obsidian-memos-list-item {
+  box-shadow: none !important;
 }
-.is-arranging > [data-sort-key]:nth-child(even) { animation-direction: alternate-reverse; }
-@keyframes memos-arrange-wiggle {
-  from { transform: rotate(-0.6deg); }
-  to { transform: rotate(0.6deg); }
+
+.obsidian-memos-view [data-sort-key] {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
 }
-@media (prefers-reduced-motion: reduce) {
-  .is-arranging > [data-sort-key] { animation: none; }
+
+.obsidian-memos-view .is-arranging > [data-sort-key] { cursor: grab; touch-action: none; }
+.obsidian-memos-view .is-arranging > .is-drag-source { opacity: .65; cursor: grabbing; }
+.obsidian-memos-view [data-sort-key].is-drop-before,
+.obsidian-memos-view [data-sort-key].is-drop-after { position: relative; }
+.obsidian-memos-view .is-drop-before::before,
+.obsidian-memos-view .is-drop-after::after {
+  content: "";
+  position: absolute;
+  inset-inline: 0;
+  height: 2px;
+  background: var(--interactive-accent);
+  pointer-events: none;
+}
+.obsidian-memos-view .is-drop-before::before { top: 0; }
+.obsidian-memos-view .is-drop-after::after { bottom: 0; }
+
+.modal.obsidian-memos-image-preview {
+  width: fit-content;
+  max-width: min(94vw, 1200px);
+}
+.obsidian-memos-image-preview .modal-content img {
+  display: block;
+  max-width: 100%;
+  max-height: 75vh;
+  object-fit: contain;
+  margin-inline: auto;
 }

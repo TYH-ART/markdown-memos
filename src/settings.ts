@@ -1,7 +1,18 @@
-import { App, PluginSettingTab, Setting } from "obsidian";
+import { App, Platform, PluginSettingTab, Setting } from "obsidian";
 import type { SettingDefinitionItem } from "obsidian";
 import type ObsidianMemosPlugin from "./main";
 import { normalizeMemoFolder } from "./utils";
+
+import { getDownloadFolder, setDownloadFolder } from "./services/FileExport";
+
+const downloadDescription = Platform.isDesktop
+  ? "填写此设备上的绝对文件夹路径。留空则每次选择保存位置。"
+  : "填写当前库内的文件夹，例如 Downloads。留空则每次选择保存位置。";
+
+function downloadFolderControl(setting: Setting, app: App): void {
+  setting.addText(text => text.setPlaceholder("每次选择").setValue(getDownloadFolder(app))
+    .onChange(value => setDownloadFolder(app, value)));
+}
 
 export class ObsidianMemosSettingTab extends PluginSettingTab {
   public constructor(
@@ -39,6 +50,11 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
             });
           });
         },
+      },
+      {
+        name: "附件默认下载路径",
+        desc: downloadDescription,
+        render: setting => downloadFolderControl(setting, this.app),
       },
       {
         name: "新建 Memo 默认类型",
@@ -133,6 +149,10 @@ export class ObsidianMemosSettingTab extends PluginSettingTab {
           await this.plugin.saveSettings();
         });
       });
+
+    downloadFolderControl(new Setting(this.containerEl)
+      .setName("附件默认下载路径")
+      .setDesc(downloadDescription), this.app);
 
     new Setting(this.containerEl)
       .setName("新建 Memo 默认类型")

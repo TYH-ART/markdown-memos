@@ -4,7 +4,7 @@ import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoAttachment, MemoRecord } from "../types";
 import { errorMessage, joinMemoContent, splitMemoContent } from "../utils";
 import { MemoAttachmentList } from "./MemoAttachmentList";
-import { openTextEditingMenu } from "./TextEditingMenu";
+import { openReadingCopyMenu, openTextEditingMenu } from "./TextEditingMenu";
 import { bindTitleToBody } from "./TitleBodyInput";
 import { resizeEditor } from "./EditorSizing";
 
@@ -87,10 +87,7 @@ export class MemoCard {
         openTextEditingMenu(target, event);
         return;
       }
-      if (this.options.isMobileLayout?.()) {
-        event.stopPropagation();
-        return;
-      }
+      if (openReadingCopyMenu(this.display, event)) return;
       event.stopPropagation();
     });
     owner.registerDomEvent(this.article, "click", (event: MouseEvent) => {

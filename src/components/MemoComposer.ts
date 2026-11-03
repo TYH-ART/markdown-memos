@@ -1,7 +1,8 @@
-import { Menu, Notice, setIcon } from "obsidian";
+import { Menu, Notice, Platform, setIcon } from "obsidian";
 import type { Component, TFile } from "obsidian";
 import type { AttachmentService } from "../services/AttachmentService";
-import { inferMime } from "../services/AttachmentService";
+import { inferMime, isWordDocument } from "../services/AttachmentService";
+import { getDesktopUploadPath } from "../services/UploadPicker";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoRecord, MemoType } from "../types";
 import { errorMessage, joinMemoContent } from "../utils";
@@ -83,15 +84,9 @@ export class MemoComposer {
       cls: "clickable-icon obsidian-memos-composer__attachment-button",
       attr: { type: "button", "aria-label": "给当前 Memo 添加附件" },
     });
-    attachmentButton.createSpan({ cls: "obsidian-memos-composer__attachment-icon-desktop", text: "📎", attr: { "aria-hidden": "true" } });
-    const mobileAttachmentIcon = attachmentButton.createSpan({ cls: "obsidian-memos-composer__attachment-icon-mobile", attr: { "aria-hidden": "true" } });
-    setIcon(mobileAttachmentIcon, "circle-plus");
-    const linkButton = tools.createEl("button", {
-      cls: "clickable-icon",
-      text: "🔗",
-      attr: { type: "button", "aria-label": "给当前 Memo 链接 Vault 文件" },
-    });
-    this.taskButton = tools.createEl("button", { cls: "obsidian-memos-composer__task", attr: { type: "button" } });
+    setIcon(attachmentButton, "plus");
+    attachmentButton.title = "上传附件";
+    this.taskButton = tools.createEl("button", { cls: "clickable-icon obsidian-memos-composer__task", attr: { type: "button" } });
     this.submitButton = footer.createEl("button", {
       cls: "mod-cta obsidian-memos-composer__submit",
       text: "NOTE",
@@ -142,7 +137,12 @@ export class MemoComposer {
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
     });
     owner.registerDomEvent(attachmentButton, "click", () => void this.queueExternalAttachments());
-    owner.registerDomEvent(linkButton, "click", () => void this.queueVaultAttachment());
+    owner.registerDomEvent(attachmentButton, "contextmenu", (event: MouseEvent) => {
+      event.preventDefault();
+      const menu = new Menu();
+      menu.addItem(item => item.setTitle("链接库内文件").setIcon("link").onClick(() => void this.queueVaultAttachment()));
+      menu.showAtMouseEvent(event);
+    });
     owner.registerDomEvent(this.taskButton, "click", () => {
       this.memoType = this.memoType === "task" ? "note" : "task";
       this.updateTaskButton();
@@ -243,7 +243,7 @@ export class MemoComposer {
   private updateTaskButton(): void {
     const isTask = this.memoType === "task";
     this.taskButton.toggleClass("is-active", isTask);
-    this.taskButton.setText(isTask ? "✓" : "○");
+    setIcon(this.taskButton, isTask ? "list-checks" : "list-todo");
     this.taskButton.setAttr("aria-pressed", String(isTask));
     this.taskButton.setAttr("aria-label", isTask ? "切换为普通 Memo" : "切换为任务");
     this.taskButton.setAttr("title", isTask ? "切换为普通 Memo" : "切换为任务");
@@ -271,8 +271,11 @@ export class MemoComposer {
 
   private async queueExternalAttachments(): Promise<void> {
     if (!this.attachmentService) return;
-    const files = await this.attachmentService.pickExternalAttachments();
-    this.addPendingExternalFiles(files);
+    try {
+      this.addPendingExternalFiles(await this.attachmentService.pickExternalAttachments());
+    } catch (error) {
+      new Notice(`选择附件失败：${errorMessage(error)}`);
+    }
   }
 
   private addPendingExternalFiles(files: File[]): void {
@@ -347,6 +350,27 @@ export class MemoComposer {
       await this.attachmentService?.openAttachment({
         path: attachment.file.path, name: attachment.name, mime: attachment.mime, size: attachment.size, managed: false,
       });
+      return;
+    }
+    if (attachment.mime.startsWith("image/") && attachment.previewUrl) {
+      this.attachmentService?.previewImage(attachment.previewUrl, attachment.name);
+      return;
+    }
+    if (isWordDocument(attachment.name, attachment.mime)) {
+      try {
+        if (Platform.isDesktopApp) {
+          const path = getDesktopUploadPath(attachment.file);
+          if (!path) throw new Error("请先保存这条备忘录，再打开 Word 附件");
+          const message = await (require("electron") as { shell: { openPath(path: string): Promise<string> } }).shell.openPath(path);
+          if (message) throw new Error(message);
+        } else if (navigator.canShare?.({ files: [attachment.file] })) {
+          await navigator.share({ files: [attachment.file], title: attachment.name });
+        } else {
+          throw new Error("请先保存这条备忘录，再打开 Word 附件");
+        }
+      } catch (error) {
+        if (!(error instanceof Error && error.name === "AbortError")) new Notice(errorMessage(error));
+      }
       return;
     }
     const url = attachment.previewUrl ?? URL.createObjectURL(attachment.file);
