@@ -141,23 +141,8 @@ test('Mobile native export passes base64 binary and shares the resulting file UR
   assert.equal(options.directory, 'CACHE');
   assert.equal(shared.url, 'file:///cache/file.zip');
 });
-test('Card copy menu keeps selection whitespace and has no tag action', async () => {
-  let menu, copied;
-  class Menu {
-    constructor() { this.items = []; menu = this; }
-    addItem(fn) {
-      const entry = { setTitle(v) { this.title = v; return this; }, setIcon() { return this; }, onClick(fn) { this.action = fn; return this; } };
-      fn(entry); this.items.push(entry);
-    }
-    showAtMouseEvent() {}
-  }
-  const { MemoCard } = load('src/components/MemoCard.ts', { obsidian: { Menu } });
-  MemoCard.prototype.openMenu.call({
-    article: { ownerDocument: { getSelection: () => ({ anchorNode: {}, focusNode: {}, toString: () => '  selected\n' }) }, contains: () => true },
-    memo: { content: 'title\n\nbody', pinned: false }, options: { isMobileLayout: () => false },
-    copyText: async text => { copied = text; },
-  }, {});
-  assert.deepEqual(menu.items.map(i => i.title), ['复制', '移动', '置顶', '删除']);
-  await menu.items[0].action();
-  assert.equal(copied, '  selected\n');
+test('Display cards omit the plugin action menu and generated URL list', () => {
+  const { MemoCard } = load('src/components/MemoCard.ts', { obsidian: {} });
+  assert.equal(MemoCard.prototype.openMenu, undefined);
+  assert.equal(MemoCard.prototype.renderDetectedLinks, undefined);
 });

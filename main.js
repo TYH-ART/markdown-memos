@@ -88,11 +88,6 @@ function joinMemoContent(title, body) {
 
 ${body}` : normalizedTitle;
 }
-function extractExternalUrls(content) {
-  var _a;
-  const matches = (_a = content.match(/https?:\/\/[^\s<>()\x5B\x5D{}"']+/gi)) != null ? _a : [];
-  return Array.from(new Set(matches.map((url) => url.replace(/[.,;:!?]+$/, ""))));
-}
 function extractMemoTagOccurrences(content) {
   const tags = [];
   const pattern = /#([\p{L}\p{N}_/-]+)/gu;
@@ -1217,8 +1212,7 @@ var MemoCard = class {
         event.stopPropagation();
         return;
       }
-      event.preventDefault();
-      this.openMenu(event);
+      event.stopPropagation();
     });
     owner.registerDomEvent(this.article, "click", (event) => {
       var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
@@ -1267,28 +1261,6 @@ var MemoCard = class {
     (_b = (_a = this.options).onEditingChange) == null ? void 0 : _b.call(_a, false);
     this.unloadMarkdownChild();
   }
-  openMenu(event) {
-    var _a, _b;
-    const selection = this.article.ownerDocument.getSelection();
-    const selectedText = (selection == null ? void 0 : selection.anchorNode) && selection.focusNode && this.article.contains(selection.anchorNode) && this.article.contains(selection.focusNode) ? selection.toString() : "";
-    const parts = splitMemoContent(this.memo.content);
-    const text = selectedText || [parts.title, parts.body].filter(Boolean).join("\n\n");
-    const menu = new import_obsidian8.Menu();
-    menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").onClick(() => void this.copyText(text)));
-    if (this.options.onDrag) menu.addItem((item) => item.setTitle("\u62D6\u52A8").setIcon("grip-vertical").onClick(() => {
-      var _a2, _b2;
-      return (_b2 = (_a2 = this.options).onDrag) == null ? void 0 : _b2.call(_a2);
-    }));
-    menu.addItem((item) => item.setTitle("\u79FB\u52A8").setIcon("folder-input").onClick(() => {
-      var _a2, _b2;
-      return (_b2 = (_a2 = this.options).onMove) == null ? void 0 : _b2.call(_a2);
-    }));
-    if (!((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a))) {
-      menu.addItem((item) => item.setTitle(this.memo.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876").setIcon("pin").onClick(() => void this.togglePinned()));
-      menu.addItem((item) => item.setTitle("\u5220\u9664").setIcon("trash-2").onClick(() => void this.deleteMemo()));
-    }
-    menu.showAtMouseEvent(event);
-  }
   async renderDisplay() {
     var _a, _b;
     this.unloadMarkdownChild();
@@ -1319,7 +1291,6 @@ var MemoCard = class {
         content.createEl("pre", { text: parts.body });
       }
     }
-    this.renderDetectedLinks(this.display, this.memo.content);
     new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), ((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a)) === true).render(
       this.display,
       this.memo.attachments
@@ -1360,7 +1331,6 @@ var MemoCard = class {
     this.editorTitleInput = titleInput;
     this.editorTextarea = textarea;
     this.editorTagTarget = titleInput;
-    const links = this.display.createDiv({ cls: "obsidian-memos-card__editor-links" });
     const updateDraft = () => {
       const content = joinMemoContent(titleInput.value, textarea.value);
       this.scheduleAutoSave(content);
@@ -1368,8 +1338,6 @@ var MemoCard = class {
       resizeEditor(textarea);
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
-      links.empty();
-      this.renderDetectedLinks(links, content);
     };
     titleInput.addEventListener("input", updateDraft);
     textarea.addEventListener("input", updateDraft);
@@ -1393,7 +1361,6 @@ var MemoCard = class {
         void this.finishEditing(joinMemoContent(titleInput.value, textarea.value));
       }, 0);
     });
-    this.renderDetectedLinks(links, this.memo.content);
     new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), ((_d = (_c = this.options).isMobileLayout) == null ? void 0 : _d.call(_c)) === true).render(
       this.display,
       this.memo.attachments
@@ -1442,14 +1409,6 @@ var MemoCard = class {
       await this.options.onChanged();
     } finally {
       this.finishingEdit = false;
-    }
-  }
-  renderDetectedLinks(container, content) {
-    const urls = extractExternalUrls(content);
-    if (urls.length === 0) return;
-    const links = container.createDiv({ cls: "obsidian-memos-detected-links", attr: { "aria-label": "\u5185\u5BB9\u4E2D\u7684\u7F51\u5740" } });
-    for (const url of urls) {
-      links.createSpan({ text: url });
     }
   }
   async addTag(tag) {
@@ -1516,14 +1475,6 @@ var MemoCard = class {
       new import_obsidian8.Notice(`\u79FB\u9664\u9644\u4EF6\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
   }
-  async copyText(text) {
-    try {
-      await navigator.clipboard.writeText(text);
-      new import_obsidian8.Notice("\u5DF2\u590D\u5236");
-    } catch (error) {
-      new import_obsidian8.Notice(`\u590D\u5236\u5931\u8D25\uFF1A${errorMessage(error)}`);
-    }
-  }
   async handleDeleteClick() {
     var _a, _b;
     if (!this.deleteArmed) {
@@ -1545,9 +1496,6 @@ var MemoCard = class {
     this.deleteButton.removeClass("is-delete-armed");
     this.deleteButton.setAttr("aria-label", "\u5220\u9664 Memo");
     this.deleteButton.setAttr("title", "\u5220\u9664");
-  }
-  async deleteMemo() {
-    await this.trashImmediately();
   }
   async trashImmediately() {
     try {
@@ -2016,82 +1964,6 @@ function renderTextWithTags(container, text) {
   if (cursor < text.length) container.appendText(text.slice(cursor));
 }
 
-// src/components/MemoReorder.ts
-function mergeVisibleOrder(all, visible) {
-  const selected = new Set(visible);
-  let index = 0;
-  return all.map((path) => selected.has(path) ? visible[index++] : path);
-}
-function armMemoReorder(host, item, commit) {
-  const original = Array.from(host.children);
-  const doc = host.ownerDocument;
-  const win = doc.defaultView;
-  const controller = new AbortController();
-  const options = { signal: controller.signal };
-  let pointer;
-  let y = 0;
-  let frame = 0;
-  let finished = false;
-  item.addClass("is-reorder-armed");
-  item.tabIndex = 0;
-  item.focus({ preventScroll: true });
-  const finish = (save) => {
-    if (finished) return;
-    finished = true;
-    win.cancelAnimationFrame(frame);
-    if (pointer !== void 0 && item.hasPointerCapture(pointer)) item.releasePointerCapture(pointer);
-    controller.abort();
-    item.removeClass("is-reorder-armed");
-    item.removeAttribute("tabindex");
-    if (!save) original.forEach((child) => host.appendChild(child));
-    else commit(Array.from(host.children).map((child) => child.dataset.memoPath).filter((path) => Boolean(path)));
-  };
-  const reposition = () => {
-    const others = Array.from(host.children).filter((child) => child !== item);
-    const next = others.find((child) => {
-      const bounds = child.getBoundingClientRect();
-      return y < bounds.top + bounds.height / 2;
-    });
-    host.insertBefore(item, next != null ? next : null);
-  };
-  const tick = () => {
-    const bounds = host.getBoundingClientRect();
-    if (y < bounds.top + 48) host.scrollTop -= 10;
-    else if (y > bounds.bottom - 48) host.scrollTop += 10;
-    reposition();
-    frame = win.requestAnimationFrame(tick);
-  };
-  item.addEventListener("pointerdown", (event) => {
-    if (pointer !== void 0 || event.button !== 0) return;
-    event.preventDefault();
-    event.stopPropagation();
-    pointer = event.pointerId;
-    y = event.clientY;
-    item.setPointerCapture(pointer);
-    frame = win.requestAnimationFrame(tick);
-  }, { ...options, capture: true });
-  doc.addEventListener("pointermove", (event) => {
-    if (event.pointerId !== pointer) return;
-    event.preventDefault();
-    y = event.clientY;
-  }, { ...options, passive: false });
-  doc.addEventListener("pointerup", (event) => {
-    if (event.pointerId === pointer) finish(true);
-  }, options);
-  doc.addEventListener("pointercancel", () => finish(false), options);
-  doc.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") finish(false);
-    else if (event.key === "Enter") finish(true);
-    else if (event.key === "ArrowUp" || event.key === "ArrowDown") {
-      event.preventDefault();
-      const sibling = event.key === "ArrowUp" ? item.previousElementSibling : item.nextElementSibling;
-      if (sibling) host.insertBefore(item, event.key === "ArrowUp" ? sibling : sibling.nextElementSibling);
-      item.scrollIntoView({ block: "nearest" });
-    }
-  }, options);
-  return () => finish(false);
-}
-
 // src/components/MemoList.ts
 var import_obsidian10 = require("obsidian");
 var MemoList = class {
@@ -2129,7 +2001,7 @@ var MemoList = class {
       const memo = path ? this.memos.find((item) => item.file.path === path) : void 0;
       if (!memo) return;
       event.preventDefault();
-      this.callbacks.onContextMenu(memo, event);
+      if (!this.listEl.hasClass("is-arranging")) this.callbacks.onContextMenu(memo, event);
     });
   }
   setMemos(memos, selectedPath) {
@@ -2164,6 +2036,7 @@ var MemoList = class {
         cls: "obsidian-memos-list-row",
         attr: { "data-memo-path": memo.file.path }
       });
+      this.callbacks.bindRowDrag(row, memo);
       const deleteButton = row.createEl("button", {
         cls: "obsidian-memos-list-row__delete",
         attr: { type: "button", "data-swipe-delete": "true", "aria-label": "\u5220\u9664 Memo", title: "\u5220\u9664" }
@@ -2184,7 +2057,6 @@ var MemoList = class {
       if (memo.pinned) {
         const pin = titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", attr: { "aria-label": "\u5DF2\u7F6E\u9876", title: "\u5DF2\u7F6E\u9876" } });
         (0, import_obsidian10.setIcon)(pin, "pin");
-        this.callbacks.bindPinDrag(pin, memo);
       }
       if (isTaskMemo(memo)) {
         titleRow.createEl("button", {
@@ -2350,11 +2222,10 @@ var MemosView = class extends import_obsidian12.ItemView {
     await this.refresh();
   }
   async onClose() {
-    var _a, _b;
-    (_a = this.cancelReorder) == null ? void 0 : _a.call(this);
+    var _a;
     this.refreshSequence += 1;
     this.destroyDetailCards();
-    (_b = this.memoList) == null ? void 0 : _b.destroy();
+    (_a = this.memoList) == null ? void 0 : _a.destroy();
     this.memoList = void 0;
     this.folderLabel = void 0;
     this.mobileTagButton = void 0;
@@ -2520,7 +2391,7 @@ var MemosView = class extends import_obsidian12.ItemView {
     const listHost = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__body" });
     this.registerDomEvent(listTopButton, "click", () => listHost.scrollTo({ top: 0, behavior: "smooth" }));
     this.memoList = new MemoList(this, listHost, {
-      bindPinDrag: (pin, memo) => this.bindPinDrag(pin, memo),
+      bindRowDrag: (row, memo) => this.bindSidebarRow(row, memo),
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
       onDelete: (memo) => this.deleteMemoFromList(memo, true),
@@ -2609,36 +2480,19 @@ var MemosView = class extends import_obsidian12.ItemView {
       const icon = button.createSpan({ cls: "obsidian-memos-mobile-library__item-icon", attr: { "aria-hidden": "true" } });
       (0, import_obsidian12.setIcon)(icon, notebook.private ? "lock" : "notebook-tabs");
       button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
-      let longPressTimer;
-      let longPressTriggered = false;
-      const clearLongPress = () => {
-        if (longPressTimer !== void 0) window.clearTimeout(longPressTimer);
-        longPressTimer = void 0;
-      };
-      this.registerDomEvent(button, "pointerdown", (event) => {
-        if (!event.isPrimary) return;
-        longPressTriggered = false;
-        clearLongPress();
-        longPressTimer = window.setTimeout(() => {
-          longPressTriggered = true;
-          this.openNotebookMenu(notebook, button);
-        }, 550);
+      row.dataset.sortKey = notebook.id;
+      this.bindArrangement(button, row, notebook.pinned ? "pinned-book" : "book", (keys) => {
+        const books = this.plugin.settings.memoNotebooks;
+        const ordered = keys.map((key) => books.find((book) => book.id === key));
+        this.plugin.settings.memoNotebooks = books.map((book) => keys.includes(book.id) ? ordered.shift() : book);
       });
-      this.registerDomEvent(button, "pointerup", clearLongPress);
-      this.registerDomEvent(button, "pointercancel", clearLongPress);
-      this.registerDomEvent(button, "pointerleave", clearLongPress);
       this.registerDomEvent(button, "contextmenu", (event) => {
+        var _a2;
         event.preventDefault();
-        this.openNotebookMenu(notebook, button);
+        if (!((_a2 = row.parentElement) == null ? void 0 : _a2.hasClass("is-arranging"))) this.openNotebookMenu(notebook, button);
       });
       this.registerDomEvent(button, "click", (event) => {
-        if (longPressTriggered) {
-          event.preventDefault();
-          event.stopPropagation();
-          longPressTriggered = false;
-          return;
-        }
-        void this.selectNotebook(notebook);
+        if (!event.defaultPrevented) void this.selectNotebook(notebook);
       });
       const expandButton = row.createEl("button", {
         cls: "clickable-icon obsidian-memos-mobile-library__expand",
@@ -2667,6 +2521,11 @@ var MemosView = class extends import_obsidian12.ItemView {
         cls: "obsidian-memos-mobile-library__content-item",
         attr: { type: "button" }
       });
+      this.bindSidebarRow(button, memo);
+      button.addEventListener("contextmenu", (event) => {
+        event.preventDefault();
+        if (!contents.hasClass("is-arranging")) this.openListContextMenu(memo, event);
+      });
       button.dataset.memoPath = memo.file.path;
       const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
       if (memo.pinned) {
@@ -2675,7 +2534,6 @@ var MemosView = class extends import_obsidian12.ItemView {
           attr: { "aria-label": "\u5DF2\u7F6E\u9876", title: "\u5DF2\u7F6E\u9876" }
         });
         (0, import_obsidian12.setIcon)(pin, "pin");
-        this.bindPinDrag(pin, memo);
       }
       titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
       const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
@@ -2825,12 +2683,11 @@ var MemosView = class extends import_obsidian12.ItemView {
     await this.refresh();
   }
   async renderDetail(sequence) {
-    var _a, _b;
+    var _a;
     const host = (_a = this.detailContentEl) == null ? void 0 : _a.querySelector(".obsidian-memos-detail-card-host");
     if (!host || sequence !== this.refreshSequence) {
       return;
     }
-    (_b = this.cancelReorder) == null ? void 0 : _b.call(this);
     const scrollTop = host.scrollTop;
     this.destroyDetailCards();
     host.empty();
@@ -2877,9 +2734,7 @@ var MemosView = class extends import_obsidian12.ItemView {
         },
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
-        trashMode: this.showTrash,
-        onMove: () => this.openMoveMenu(memo),
-        onDrag: this.showTrash ? void 0 : () => this.beginMemoReorder(memo)
+        trashMode: this.showTrash
       });
       this.detailCards.push(card);
       await card.render();
@@ -2889,24 +2744,6 @@ var MemosView = class extends import_obsidian12.ItemView {
       this.scrollSelectedIntoView(false);
       this.pendingScrollPath = void 0;
     }
-  }
-  beginMemoReorder(memo) {
-    var _a, _b, _c;
-    const host = (_a = this.detailContentEl) == null ? void 0 : _a.querySelector(".obsidian-memos-detail-card-host");
-    const item = Array.from((_b = host == null ? void 0 : host.children) != null ? _b : []).find((child) => child.dataset.memoPath === memo.file.path);
-    if (!host || !item) return;
-    (_c = this.cancelReorder) == null ? void 0 : _c.call(this);
-    this.mobileDetail = true;
-    this.updateLayoutState();
-    item.scrollIntoView({ block: "nearest" });
-    this.cancelReorder = armMemoReorder(host, item, (paths) => {
-      this.cancelReorder = void 0;
-      this.plugin.settings.manualMemoOrder = mergeVisibleOrder(this.allMemos.map((m) => m.file.path), paths);
-      this.sortOption = "manual";
-      if (this.sortSelect) this.sortSelect.value = "manual";
-      void this.plugin.saveSettings().then(() => this.refresh()).catch(() => new import_obsidian12.Notice("\u6392\u5E8F\u4FDD\u5B58\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5"));
-    });
-    new import_obsidian12.Notice("\u62D6\u52A8\u5DF2\u9009\u4E2D\u7684 Memo \u8C03\u6574\u4F4D\u7F6E\uFF0C\u677E\u624B\u4FDD\u5B58\uFF1BEsc \u53D6\u6D88\uFF0C\u4E5F\u53EF\u7528\u65B9\u5411\u952E\u79FB\u52A8\u3001\u56DE\u8F66\u4FDD\u5B58");
   }
   selectMemo(memo) {
     var _a;
@@ -3039,37 +2876,88 @@ var MemosView = class extends import_obsidian12.ItemView {
     }).slice(0, limit);
   }
   sidebarOrder(memos) {
-    var _a;
+    var _a, _b;
     const ranks = new Map(((_a = this.plugin.settings.pinnedMemoOrder) != null ? _a : []).map((path, index) => [path, index]));
+    const normal = new Map(((_b = this.plugin.settings.sidebarMemoOrder) != null ? _b : []).map((path, index) => [path, index]));
     return [...memos].sort((a, b) => {
-      var _a2, _b;
-      return Number(b.pinned) - Number(a.pinned) || (a.pinned && b.pinned ? ((_a2 = ranks.get(a.file.path)) != null ? _a2 : Infinity) - ((_b = ranks.get(b.file.path)) != null ? _b : Infinity) : 0);
+      var _a2, _b2, _c, _d;
+      return Number(b.pinned) - Number(a.pinned) || (a.pinned && b.pinned ? ((_a2 = ranks.get(a.file.path)) != null ? _a2 : Infinity) - ((_b2 = ranks.get(b.file.path)) != null ? _b2 : Infinity) : ((_c = normal.get(a.file.path)) != null ? _c : Infinity) - ((_d = normal.get(b.file.path)) != null ? _d : Infinity));
     });
   }
-  bindPinDrag(pin, memo) {
-    pin.addClass("obsidian-memos-pin-handle");
-    pin.title = "\u62D6\u52A8\u8C03\u6574\u7F6E\u9876\u987A\u5E8F";
-    pin.addEventListener("pointerdown", (event) => {
-      if (!event.isPrimary || event.button !== 0) return;
-      event.stopPropagation();
-      pin.setPointerCapture(event.pointerId);
+  bindSidebarRow(row, memo) {
+    row.dataset.sortKey = memo.file.path;
+    this.bindArrangement(row, row, memo.pinned ? "pinned" : "memo", (keys) => {
+      const field = memo.pinned ? "pinnedMemoOrder" : "sidebarMemoOrder";
+      const all = this.sidebarOrder(this.allMemos.filter((entry) => entry.pinned === memo.pinned));
+      const visible = new Set(keys);
+      this.plugin.settings[field] = all.map((entry) => visible.has(entry.file.path) ? keys.shift() : entry.file.path);
     });
-    pin.addEventListener("pointerup", (event) => {
-      var _a, _b, _c;
-      if (!pin.hasPointerCapture(event.pointerId)) return;
-      const row = (_a = pin.ownerDocument.elementFromPoint(event.clientX, event.clientY)) == null ? void 0 : _a.closest("[data-memo-path]");
-      const ordered = this.sidebarOrder(this.allMemos.filter((entry) => entry.pinned)).map((entry) => entry.file.path);
-      const from = ordered.indexOf(memo.file.path);
-      const to = ordered.indexOf((_b = row == null ? void 0 : row.dataset.memoPath) != null ? _b : "");
-      if (from < 0 || to < 0 || from === to) return;
-      ordered.splice(from, 1);
-      ordered.splice(to, 0, memo.file.path);
-      this.plugin.settings.pinnedMemoOrder = ordered;
-      void this.plugin.saveSettings();
-      this.renderMobileLibrary();
-      (_c = this.memoList) == null ? void 0 : _c.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+  }
+  bindArrangement(handle, row, group, save) {
+    const host = row.parentElement;
+    row.dataset.sortGroup = group;
+    let timer;
+    let startY = 0;
+    let dragging = false;
+    let moved = false;
+    let alreadyArranging = false;
+    const clear = () => window.clearTimeout(timer);
+    handle.addEventListener("pointerdown", (event) => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      alreadyArranging = host.hasClass("is-arranging");
+      moved = false;
+      startY = event.clientY;
+      const begin = () => {
+        dragging = true;
+        host.addClass("is-arranging");
+        handle.setPointerCapture(event.pointerId);
+      };
+      if (host.hasClass("is-arranging")) begin();
+      else timer = window.setTimeout(begin, 480);
     });
-    pin.addEventListener("click", (event) => event.stopPropagation());
+    handle.addEventListener("pointermove", (event) => {
+      var _a;
+      if (!dragging) {
+        if (Math.abs(event.clientY - startY) > 7) clear();
+        return;
+      }
+      const target = (_a = host.ownerDocument.elementFromPoint(event.clientX, event.clientY)) == null ? void 0 : _a.closest("[data-sort-key]");
+      if (!target || target === row || target.parentElement !== host || target.dataset.sortGroup !== group) return;
+      const after = Boolean(row.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const previousTop = target.getBoundingClientRect().top;
+      host.insertBefore(row, after ? target.nextSibling : target);
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const offset = previousTop - target.getBoundingClientRect().top;
+        target.animate([{ translate: `0 ${offset}px` }, { translate: "0 0" }], { duration: 170, easing: "ease-out" });
+      }
+      handle.setPointerCapture(event.pointerId);
+      moved = true;
+    });
+    handle.addEventListener("pointerleave", () => {
+      if (!dragging) clear();
+    });
+    const finish = () => {
+      var _a;
+      clear();
+      if (dragging && moved) {
+        const keys = Array.from(host.children).filter((el) => el.dataset.sortGroup === group).map((el) => el.dataset.sortKey);
+        save(keys);
+        void this.plugin.saveSettings();
+        host.removeClass("is-arranging");
+        this.renderMobileLibrary();
+        (_a = this.memoList) == null ? void 0 : _a.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+      }
+      dragging = false;
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("click", (event) => {
+      if (host.hasClass("is-arranging") || moved) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (alreadyArranging && !moved) host.removeClass("is-arranging");
+      }
+    }, true);
   }
   sortMemos(memos) {
     var _a;
@@ -3096,6 +2984,7 @@ var MemosView = class extends import_obsidian12.ItemView {
     });
   }
   openListContextMenu(memo, event) {
+    var _a, _b;
     const menu = new import_obsidian12.Menu();
     menu.addItem((item) => item.setTitle("\u590D\u5236").setIcon("copy").onClick(async () => {
       try {
@@ -3105,39 +2994,13 @@ var MemosView = class extends import_obsidian12.ItemView {
         new import_obsidian12.Notice("\u590D\u5236\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5");
       }
     }));
-    if (!this.showTrash) menu.addItem((item) => item.setTitle("\u62D6\u52A8").setIcon("grip-vertical").onClick(() => this.beginMemoReorder(memo)));
-    menu.addItem((item) => item.setTitle("\u79FB\u52A8").setIcon("folder-input").onClick(() => this.openMoveMenu(memo)));
-    if (!this.isMobileLayout()) {
+    const host = (_b = (_a = event.target) == null ? void 0 : _a.closest("[data-sort-key]")) == null ? void 0 : _b.parentElement;
+    if (host) menu.addItem((item) => item.setTitle("\u62D6\u52A8").setIcon("grip-vertical").onClick(() => host.addClass("is-arranging")));
+    {
       menu.addItem((item) => item.setTitle(memo.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
       menu.addItem((item) => item.setTitle("\u5220\u9664").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     }
     menu.showAtMouseEvent(event);
-  }
-  openMoveMenu(memo) {
-    const notebooks = this.plugin.settings.memoNotebooks.filter((notebook) => notebook.id !== memo.notebookId);
-    if (notebooks.length === 0) {
-      new import_obsidian12.Notice("\u6CA1\u6709\u53EF\u79FB\u52A8\u7684\u5907\u5FD8\u5F55");
-      return;
-    }
-    const menu = new import_obsidian12.Menu();
-    for (const notebook of notebooks) {
-      menu.addItem((item) => item.setTitle(notebook.name).setIcon(notebook.private ? "lock" : "notebook-tabs").onClick(() => void this.moveMemoToNotebook(memo, notebook)));
-    }
-    menu.showAtPosition({ x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) });
-  }
-  async moveMemoToNotebook(memo, notebook) {
-    if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
-      await this.selectNotebook(notebook);
-      if (!this.unlockedNotebookIds.has(notebook.id)) return;
-    }
-    try {
-      await this.plugin.repository.moveMemoToNotebook(memo.file, notebook.id);
-      await this.refresh(memo.file.path);
-      new import_obsidian12.Notice(`\u5DF2\u79FB\u52A8\u5230\u201C${notebook.name}\u201D`);
-    } catch (error) {
-      console.error("[Markdown Memos] \u79FB\u52A8 Memo \u5931\u8D25\u3002", error);
-      new import_obsidian12.Notice("\u79FB\u52A8\u5931\u8D25");
-    }
   }
   async togglePinnedFromList(memo) {
     try {

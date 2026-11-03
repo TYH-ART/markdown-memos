@@ -1,8 +1,8 @@
-import { App, Component, MarkdownRenderChild, MarkdownRenderer, Menu, Notice, setIcon } from "obsidian";
+import { App, Component, MarkdownRenderChild, MarkdownRenderer, Notice, setIcon } from "obsidian";
 import type { AttachmentService } from "../services/AttachmentService";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoAttachment, MemoRecord } from "../types";
-import { errorMessage, extractExternalUrls, joinMemoContent, splitMemoContent } from "../utils";
+import { errorMessage, joinMemoContent, splitMemoContent } from "../utils";
 import { MemoAttachmentList } from "./MemoAttachmentList";
 import { openTextEditingMenu } from "./TextEditingMenu";
 import { bindTitleToBody } from "./TitleBodyInput";
@@ -15,8 +15,6 @@ export interface MemoCardOptions {
   getPopularTags?: () => string[];
   isMobileLayout?: () => boolean;
   trashMode?: boolean;
-  onMove?: () => void;
-  onDrag?: () => void;
 }
 
 export class MemoCard {
@@ -93,8 +91,7 @@ export class MemoCard {
         event.stopPropagation();
         return;
       }
-      event.preventDefault();
-      this.openMenu(event);
+      event.stopPropagation();
     });
     owner.registerDomEvent(this.article, "click", (event: MouseEvent) => {
       const target = event.target instanceof Element ? event.target : null;
@@ -147,23 +144,6 @@ export class MemoCard {
     this.unloadMarkdownChild();
   }
 
-  private openMenu(event: MouseEvent): void {
-    const selection = this.article.ownerDocument.getSelection();
-    const selectedText = selection?.anchorNode && selection.focusNode
-      && this.article.contains(selection.anchorNode) && this.article.contains(selection.focusNode)
-      ? selection.toString() : "";
-    const parts = splitMemoContent(this.memo.content);
-    const text = selectedText || [parts.title, parts.body].filter(Boolean).join("\n\n");
-    const menu = new Menu();
-    menu.addItem((item) => item.setTitle("复制").setIcon("copy").onClick(() => void this.copyText(text)));
-    if (this.options.onDrag) menu.addItem((item) => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => this.options.onDrag?.()));
-    menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.options.onMove?.()));
-    if (!this.options.isMobileLayout?.()) {
-      menu.addItem((item) => item.setTitle(this.memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinned()));
-      menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemo()));
-    }
-    menu.showAtMouseEvent(event);
-  }
 
   private async renderDisplay(): Promise<void> {
     this.unloadMarkdownChild();
@@ -195,7 +175,6 @@ export class MemoCard {
         content.createEl("pre", { text: parts.body });
       }
     }
-    this.renderDetectedLinks(this.display, this.memo.content);
 
     new MemoAttachmentList(this.owner, this.options.attachmentService, (attachment) => this.removeAttachment(attachment), this.options.isMobileLayout?.() === true).render(
       this.display,
@@ -238,7 +217,6 @@ export class MemoCard {
     this.editorTitleInput = titleInput;
     this.editorTextarea = textarea;
     this.editorTagTarget = titleInput;
-    const links = this.display.createDiv({ cls: "obsidian-memos-card__editor-links" });
 
     const updateDraft = (): void => {
       const content = joinMemoContent(titleInput.value, textarea.value);
@@ -247,8 +225,6 @@ export class MemoCard {
       resizeEditor(textarea);
       this.renderEditorMirror(titleMirror, titleInput.value);
       this.renderEditorMirror(bodyMirror, textarea.value);
-      links.empty();
-      this.renderDetectedLinks(links, content);
     };
     titleInput.addEventListener("input", updateDraft);
     textarea.addEventListener("input", updateDraft);
@@ -266,7 +242,6 @@ export class MemoCard {
         void this.finishEditing(joinMemoContent(titleInput.value, textarea.value));
       }, 0);
     });
-    this.renderDetectedLinks(links, this.memo.content);
     // Keep mobile attachments available while editing so images/files can still
     // be opened without leaving the editor. Desktop keeps its existing editor
     // layout unchanged.
@@ -325,14 +300,6 @@ export class MemoCard {
     }
   }
 
-  private renderDetectedLinks(container: HTMLElement, content: string): void {
-    const urls = extractExternalUrls(content);
-    if (urls.length === 0) return;
-    const links = container.createDiv({ cls: "obsidian-memos-detected-links", attr: { "aria-label": "内容中的网址" } });
-    for (const url of urls) {
-      links.createSpan({ text: url });
-    }
-  }
 
   public async addTag(tag: string): Promise<void> {
     await this.startEditing(tag);
@@ -405,14 +372,6 @@ export class MemoCard {
     }
   }
 
-  private async copyText(text: string): Promise<void> {
-    try {
-      await navigator.clipboard.writeText(text);
-      new Notice("已复制");
-    } catch (error) {
-      new Notice(`复制失败：${errorMessage(error)}`);
-    }
-  }
 
   private async handleDeleteClick(): Promise<void> {
     if (!this.deleteArmed) {
@@ -437,9 +396,6 @@ export class MemoCard {
     this.deleteButton.setAttr("title", "删除");
   }
 
-  private async deleteMemo(): Promise<void> {
-    await this.trashImmediately();
-  }
 
   private async trashImmediately(): Promise<void> {
     try {

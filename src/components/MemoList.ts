@@ -5,7 +5,7 @@ import { splitMemoContent } from "../utils";
 
 
 export interface MemoListPaneCallbacks {
-  bindPinDrag: (pin: HTMLElement, memo: MemoRecord) => void;
+  bindRowDrag: (pin: HTMLElement, memo: MemoRecord) => void;
   onSelect: (memo: MemoRecord) => void;
   onToggleTask: (memo: MemoRecord) => void;
   onDelete: (memo: MemoRecord) => void | Promise<void>;
@@ -55,7 +55,7 @@ export class MemoList {
       const memo = path ? this.memos.find((item) => item.file.path === path) : undefined;
       if (!memo) return;
       event.preventDefault();
-      this.callbacks.onContextMenu(memo, event);
+      if (!this.listEl.hasClass("is-arranging")) this.callbacks.onContextMenu(memo, event);
     });
   }
 
@@ -95,6 +95,7 @@ export class MemoList {
         cls: "obsidian-memos-list-row",
         attr: { "data-memo-path": memo.file.path },
       });
+      this.callbacks.bindRowDrag(row, memo);
       const deleteButton = row.createEl("button", {
         cls: "obsidian-memos-list-row__delete",
         attr: { type: "button", "data-swipe-delete": "true", "aria-label": "删除 Memo", title: "删除" },
@@ -115,7 +116,7 @@ export class MemoList {
       if (memo.pinned) {
         const pin = titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", attr: { "aria-label": "已置顶", title: "已置顶" } });
         setIcon(pin, "pin");
-        this.callbacks.bindPinDrag(pin, memo);
+
       }
       if (isTaskMemo(memo)) {
         titleRow.createEl("button", {

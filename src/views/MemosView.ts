@@ -2,7 +2,6 @@ import { App, ItemView, Menu, Modal, Notice, Platform, setIcon, WorkspaceLeaf } 
 import type ObsidianMemosPlugin from "../main";
 import { MemoCard } from "../components/MemoCard";
 import { MemoComposer } from "../components/MemoComposer";
-import { armMemoReorder, mergeVisibleOrder } from "../components/MemoReorder";
 import { formatListDate, getMemoListTitle, getSummary, MemoList } from "../components/MemoList";
 import { confirmMemoDeletion } from "../components/MemoDeleteModal";
 import type { MemoRecord } from "../types";
@@ -45,7 +44,6 @@ export class MemosView extends ItemView {
   private expandedNotebookId = "default";
   private readonly unlockedNotebookIds = new Set<string>(["default"]);
   private mobileDrawerButton?: HTMLButtonElement;
-  private cancelReorder?: () => void;
 
   public constructor(
     leaf: WorkspaceLeaf,
@@ -81,7 +79,6 @@ export class MemosView extends ItemView {
   }
 
   public override async onClose(): Promise<void> {
-    this.cancelReorder?.();
     this.refreshSequence += 1;
     this.destroyDetailCards();
     this.memoList?.destroy();
@@ -256,7 +253,7 @@ export class MemosView extends ItemView {
     const listHost = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__body" });
     this.registerDomEvent(listTopButton, "click", () => listHost.scrollTo({ top: 0, behavior: "smooth" }));
     this.memoList = new MemoList(this, listHost, {
-      bindPinDrag: (pin, memo) => this.bindPinDrag(pin, memo),
+      bindRowDrag: (row, memo) => this.bindSidebarRow(row, memo),
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
       onDelete: (memo) => this.deleteMemoFromList(memo, true),
@@ -351,36 +348,18 @@ export class MemosView extends ItemView {
       const icon = button.createSpan({ cls: "obsidian-memos-mobile-library__item-icon", attr: { "aria-hidden": "true" } });
       setIcon(icon, notebook.private ? "lock" : "notebook-tabs");
       button.createSpan({ cls: "obsidian-memos-mobile-library__item-name", text: notebook.name });
-      let longPressTimer: number | undefined;
-      let longPressTriggered = false;
-      const clearLongPress = (): void => {
-        if (longPressTimer !== undefined) window.clearTimeout(longPressTimer);
-        longPressTimer = undefined;
-      };
-      this.registerDomEvent(button, "pointerdown", (event: PointerEvent) => {
-        if (!event.isPrimary) return;
-        longPressTriggered = false;
-        clearLongPress();
-        longPressTimer = window.setTimeout(() => {
-          longPressTriggered = true;
-          this.openNotebookMenu(notebook, button);
-        }, 550);
+      row.dataset.sortKey = notebook.id;
+      this.bindArrangement(button, row, notebook.pinned ? "pinned-book" : "book", keys => {
+        const books = this.plugin.settings.memoNotebooks;
+        const ordered = keys.map(key => books.find(book => book.id === key)!);
+        this.plugin.settings.memoNotebooks = books.map(book => keys.includes(book.id) ? ordered.shift()! : book);
       });
-      this.registerDomEvent(button, "pointerup", clearLongPress);
-      this.registerDomEvent(button, "pointercancel", clearLongPress);
-      this.registerDomEvent(button, "pointerleave", clearLongPress);
       this.registerDomEvent(button, "contextmenu", (event: MouseEvent) => {
         event.preventDefault();
-        this.openNotebookMenu(notebook, button);
+        if (!row.parentElement?.hasClass("is-arranging")) this.openNotebookMenu(notebook, button);
       });
       this.registerDomEvent(button, "click", (event: MouseEvent) => {
-        if (longPressTriggered) {
-          event.preventDefault();
-          event.stopPropagation();
-          longPressTriggered = false;
-          return;
-        }
-        void this.selectNotebook(notebook);
+        if (!event.defaultPrevented) void this.selectNotebook(notebook);
       });
       const expandButton = row.createEl("button", {
         cls: "clickable-icon obsidian-memos-mobile-library__expand",
@@ -410,6 +389,11 @@ export class MemosView extends ItemView {
         cls: "obsidian-memos-mobile-library__content-item",
         attr: { type: "button" },
       });
+      this.bindSidebarRow(button, memo);
+      button.addEventListener("contextmenu", event => {
+        event.preventDefault();
+        if (!contents.hasClass("is-arranging")) this.openListContextMenu(memo, event);
+      });
       button.dataset.memoPath = memo.file.path;
       const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
       if (memo.pinned) {
@@ -418,7 +402,7 @@ export class MemosView extends ItemView {
           attr: { "aria-label": "已置顶", title: "已置顶" },
         });
         setIcon(pin, "pin");
-        this.bindPinDrag(pin, memo);
+
       }
       titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
       const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
@@ -583,7 +567,6 @@ export class MemosView extends ItemView {
     if (!host || sequence !== this.refreshSequence) {
       return;
     }
-    this.cancelReorder?.();
     const scrollTop = host.scrollTop;
     this.destroyDetailCards();
     host.empty();
@@ -633,8 +616,6 @@ export class MemosView extends ItemView {
         getPopularTags: () => this.getPopularTags(3),
         isMobileLayout: () => this.isMobileLayout(),
         trashMode: this.showTrash,
-        onMove: () => this.openMoveMenu(memo),
-        onDrag: this.showTrash ? undefined : () => this.beginMemoReorder(memo),
       });
       this.detailCards.push(card);
       await card.render();
@@ -644,24 +625,6 @@ export class MemosView extends ItemView {
       this.scrollSelectedIntoView(false);
       this.pendingScrollPath = undefined;
     }
-  }
-
-  private beginMemoReorder(memo: MemoRecord): void {
-    const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
-    const item = Array.from(host?.children ?? []).find(child => (child as HTMLElement).dataset.memoPath === memo.file.path) as HTMLElement | undefined;
-    if (!host || !item) return;
-    this.cancelReorder?.();
-    this.mobileDetail = true;
-    this.updateLayoutState();
-    item.scrollIntoView({ block: "nearest" });
-    this.cancelReorder = armMemoReorder(host, item, paths => {
-      this.cancelReorder = undefined;
-      this.plugin.settings.manualMemoOrder = mergeVisibleOrder(this.allMemos.map(m => m.file.path), paths);
-      this.sortOption = "manual";
-      if (this.sortSelect) this.sortSelect.value = "manual";
-      void this.plugin.saveSettings().then(() => this.refresh()).catch(() => new Notice("排序保存失败，请重试"));
-    });
-    new Notice("拖动已选中的 Memo 调整位置，松手保存；Esc 取消，也可用方向键移动、回车保存");
   }
 
   private selectMemo(memo: MemoRecord): void {
@@ -804,33 +767,83 @@ export class MemosView extends ItemView {
 
   private sidebarOrder(memos: MemoRecord[]): MemoRecord[] {
     const ranks = new Map((this.plugin.settings.pinnedMemoOrder ?? []).map((path, index) => [path, index]));
+    const normal = new Map((this.plugin.settings.sidebarMemoOrder ?? []).map((path, index) => [path, index]));
     return [...memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) ||
-      (a.pinned && b.pinned ? (ranks.get(a.file.path) ?? Infinity) - (ranks.get(b.file.path) ?? Infinity) : 0));
+      (a.pinned && b.pinned ? (ranks.get(a.file.path) ?? Infinity) - (ranks.get(b.file.path) ?? Infinity) : (normal.get(a.file.path) ?? Infinity) - (normal.get(b.file.path) ?? Infinity)));
   }
 
-  private bindPinDrag(pin: HTMLElement, memo: MemoRecord): void {
-    pin.addClass("obsidian-memos-pin-handle");
-    pin.title = "拖动调整置顶顺序";
-    pin.addEventListener("pointerdown", event => {
-      if (!event.isPrimary || event.button !== 0) return;
-      event.stopPropagation();
-      pin.setPointerCapture(event.pointerId);
+  private bindSidebarRow(row: HTMLElement, memo: MemoRecord): void {
+    row.dataset.sortKey = memo.file.path;
+    this.bindArrangement(row, row, memo.pinned ? "pinned" : "memo", keys => {
+      const field = memo.pinned ? "pinnedMemoOrder" : "sidebarMemoOrder";
+      const all = this.sidebarOrder(this.allMemos.filter(entry => entry.pinned === memo.pinned));
+      const visible = new Set(keys);
+      this.plugin.settings[field] = all.map(entry => visible.has(entry.file.path) ? keys.shift()! : entry.file.path);
     });
-    pin.addEventListener("pointerup", event => {
-      if (!pin.hasPointerCapture(event.pointerId)) return;
-      const row = pin.ownerDocument.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-memo-path]");
-      const ordered = this.sidebarOrder(this.allMemos.filter(entry => entry.pinned)).map(entry => entry.file.path);
-      const from = ordered.indexOf(memo.file.path);
-      const to = ordered.indexOf(row?.dataset.memoPath ?? "");
-      if (from < 0 || to < 0 || from === to) return;
-      ordered.splice(from, 1);
-      ordered.splice(to, 0, memo.file.path);
-      this.plugin.settings.pinnedMemoOrder = ordered;
-      void this.plugin.saveSettings();
-      this.renderMobileLibrary();
-      this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+  }
+
+  private bindArrangement(handle: HTMLElement, row: HTMLElement, group: string, save: (keys: string[]) => void): void {
+    const host = row.parentElement!;
+    row.dataset.sortGroup = group;
+    let timer: number | undefined;
+    let startY = 0;
+    let dragging = false;
+    let moved = false;
+    let alreadyArranging = false;
+    const clear = () => window.clearTimeout(timer);
+    handle.addEventListener("pointerdown", event => {
+      if (event.button !== 0 || !event.isPrimary) return;
+      alreadyArranging = host.hasClass("is-arranging");
+      moved = false;
+      startY = event.clientY;
+      const begin = () => {
+        dragging = true;
+        host.addClass("is-arranging");
+        handle.setPointerCapture(event.pointerId);
+      };
+      if (host.hasClass("is-arranging")) begin();
+      else timer = window.setTimeout(begin, 480);
     });
-    pin.addEventListener("click", event => event.stopPropagation());
+    handle.addEventListener("pointermove", event => {
+      if (!dragging) {
+        if (Math.abs(event.clientY - startY) > 7) clear();
+        return;
+      }
+      const target = host.ownerDocument.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-sort-key]");
+      if (!target || target === row || target.parentElement !== host || target.dataset.sortGroup !== group) return;
+      const after = Boolean(row.compareDocumentPosition(target) & Node.DOCUMENT_POSITION_FOLLOWING);
+      const previousTop = target.getBoundingClientRect().top;
+      host.insertBefore(row, after ? target.nextSibling : target);
+      if (!window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        const offset = previousTop - target.getBoundingClientRect().top;
+        target.animate([{ translate: `0 ${offset}px` }, { translate: "0 0" }], { duration: 170, easing: "ease-out" });
+      }
+      handle.setPointerCapture(event.pointerId);
+      moved = true;
+    });
+    handle.addEventListener("pointerleave", () => { if (!dragging) clear(); });
+    const finish = () => {
+      clear();
+      if (dragging && moved) {
+        const keys = Array.from(host.children).filter(el => (el as HTMLElement).dataset.sortGroup === group)
+          .map(el => (el as HTMLElement).dataset.sortKey!);
+        save(keys);
+        void this.plugin.saveSettings();
+        host.removeClass("is-arranging");
+        this.renderMobileLibrary();
+        this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+      }
+      dragging = false;
+    };
+    handle.addEventListener("pointerup", finish);
+    handle.addEventListener("pointercancel", finish);
+    handle.addEventListener("click", event => {
+      if (host.hasClass("is-arranging") || moved) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (alreadyArranging && !moved) host.removeClass("is-arranging");
+      }
+    }, true);
   }
 
   private sortMemos(memos: MemoRecord[]): MemoRecord[] {
@@ -864,42 +877,14 @@ export class MemosView extends ItemView {
         new Notice("复制失败，请重试");
       }
     }));
-    if (!this.showTrash) menu.addItem(item => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => this.beginMemoReorder(memo)));
-    menu.addItem((item) => item.setTitle("移动").setIcon("folder-input").onClick(() => this.openMoveMenu(memo)));
-    if (!this.isMobileLayout()) {
+    const host = (event.target as Element)?.closest<HTMLElement>("[data-sort-key]")?.parentElement;
+    if (host) menu.addItem(item => item.setTitle("拖动").setIcon("grip-vertical").onClick(() => host.addClass("is-arranging")));
+
+    {
       menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
       menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     }
     menu.showAtMouseEvent(event);
-  }
-
-  private openMoveMenu(memo: MemoRecord): void {
-    const notebooks = this.plugin.settings.memoNotebooks.filter((notebook) => notebook.id !== memo.notebookId);
-    if (notebooks.length === 0) {
-      new Notice("没有可移动的备忘录");
-      return;
-    }
-    const menu = new Menu();
-    for (const notebook of notebooks) {
-      menu.addItem((item) => item.setTitle(notebook.name).setIcon(notebook.private ? "lock" : "notebook-tabs")
-        .onClick(() => void this.moveMemoToNotebook(memo, notebook)));
-    }
-    menu.showAtPosition({ x: Math.round(window.innerWidth / 2), y: Math.round(window.innerHeight / 2) });
-  }
-
-  private async moveMemoToNotebook(memo: MemoRecord, notebook: MemoNotebook): Promise<void> {
-    if (notebook.private && !this.unlockedNotebookIds.has(notebook.id)) {
-      await this.selectNotebook(notebook);
-      if (!this.unlockedNotebookIds.has(notebook.id)) return;
-    }
-    try {
-      await this.plugin.repository.moveMemoToNotebook(memo.file, notebook.id);
-      await this.refresh(memo.file.path);
-      new Notice(`已移动到“${notebook.name}”`);
-    } catch (error) {
-      console.error("[Markdown Memos] 移动 Memo 失败。", error);
-      new Notice("移动失败");
-    }
   }
 
   private async togglePinnedFromList(memo: MemoRecord): Promise<void> {

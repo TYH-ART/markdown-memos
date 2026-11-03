@@ -2697,3 +2697,20 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .is-mobile .obsidian-memos-card__display {
   -webkit-touch-callout: default;
 }
+
+.obsidian-memos-view button.obsidian-memos-mobile-library__trash {
+  box-shadow: none !important;
+}
+.is-arranging > [data-sort-key] {
+  touch-action: none;
+  cursor: grab;
+  animation: memos-arrange-wiggle .28s ease-in-out infinite alternate;
+}
+.is-arranging > [data-sort-key]:nth-child(even) { animation-direction: alternate-reverse; }
+@keyframes memos-arrange-wiggle {
+  from { transform: rotate(-0.6deg); }
+  to { transform: rotate(0.6deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .is-arranging > [data-sort-key] { animation: none; }
+}
