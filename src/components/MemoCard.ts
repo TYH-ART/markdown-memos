@@ -181,6 +181,9 @@ export class MemoCard {
       this.owner.addChild(this.markdownChild);
       try {
         await MarkdownRenderer.render(this.app, parts.body, content, this.memo.file.path, this.markdownChild);
+        for (const link of Array.from(content.querySelectorAll("a.external-link, a[href^='http:' i], a[href^='https:' i], a[href^='//'], a[href^='mailto:' i]"))) {
+          link.replaceWith(...Array.from(link.childNodes));
+        }
         this.highlightInlineTags(content);
       } catch (error) {
         console.warn(`[Markdown Memos] Markdown 渲染失败：${this.memo.file.path}`, error);
@@ -323,7 +326,7 @@ export class MemoCard {
     if (urls.length === 0) return;
     const links = container.createDiv({ cls: "obsidian-memos-detected-links", attr: { "aria-label": "内容中的网址" } });
     for (const url of urls) {
-      links.createEl("a", { cls: "external-link", text: url, href: url, attr: { target: "_blank", rel: "noopener noreferrer" } });
+      links.createSpan({ text: url });
     }
   }
 

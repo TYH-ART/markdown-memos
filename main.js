@@ -1304,6 +1304,9 @@ var MemoCard = class {
       this.owner.addChild(this.markdownChild);
       try {
         await import_obsidian8.MarkdownRenderer.render(this.app, parts.body, content, this.memo.file.path, this.markdownChild);
+        for (const link of Array.from(content.querySelectorAll("a.external-link, a[href^='http:' i], a[href^='https:' i], a[href^='//'], a[href^='mailto:' i]"))) {
+          link.replaceWith(...Array.from(link.childNodes));
+        }
         this.highlightInlineTags(content);
       } catch (error) {
         console.warn(`[Markdown Memos] Markdown \u6E32\u67D3\u5931\u8D25\uFF1A${this.memo.file.path}`, error);
@@ -1441,7 +1444,7 @@ var MemoCard = class {
     if (urls.length === 0) return;
     const links = container.createDiv({ cls: "obsidian-memos-detected-links", attr: { "aria-label": "\u5185\u5BB9\u4E2D\u7684\u7F51\u5740" } });
     for (const url of urls) {
-      links.createEl("a", { cls: "external-link", text: url, href: url, attr: { target: "_blank", rel: "noopener noreferrer" } });
+      links.createSpan({ text: url });
     }
   }
   async addTag(tag) {

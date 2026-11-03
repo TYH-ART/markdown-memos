@@ -554,7 +554,7 @@
   margin-top: 10px;
 }
 
-.obsidian-memos-detected-links a {
+.obsidian-memos-detected-links span {
   max-width: 100%;
   overflow: hidden;
   /* URLs are metadata text; keep them visually neutral instead of using the
@@ -567,7 +567,9 @@
 
 /* Display mode must remain selectable so users can copy content without
  * entering the editor first. */
-.obsidian-memos-card__display {
+.obsidian-memos-card__display,
+.obsidian-memos-card__title,
+.obsidian-memos-card__content * {
   user-select: text;
   -webkit-user-select: text;
 }
