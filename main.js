@@ -1207,16 +1207,21 @@ var MemoCard = class {
     });
     owner.registerDomEvent(readingCloseButton, "click", () => this.exitReadingMode());
     owner.registerDomEvent(this.article, "contextmenu", (event) => {
+      var _a, _b;
       const target = event.target;
       if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
         openTextEditingMenu(target, event);
+        return;
+      }
+      if ((_b = (_a = this.options).isMobileLayout) == null ? void 0 : _b.call(_a)) {
+        event.stopPropagation();
         return;
       }
       event.preventDefault();
       this.openMenu(event);
     });
     owner.registerDomEvent(this.article, "click", (event) => {
-      var _a, _b, _c, _d, _e, _f, _g, _h;
+      var _a, _b, _c, _d, _e, _f, _g, _h, _i, _j, _k;
       const target = event.target instanceof Element ? event.target : null;
       if (target == null ? void 0 : target.closest("a, button, select, input, textarea")) return;
       if (this.article.hasClass("is-editing") && event.detail === 1) {
@@ -1226,11 +1231,11 @@ var MemoCard = class {
         void this.finishEditing(joinMemoContent(title, body));
         return;
       }
-      if (event.detail === 2) {
+      if (event.detail === 2 && !(((_f = (_e = this.options).isMobileLayout) == null ? void 0 : _f.call(_e)) && !((_g = this.article.ownerDocument.getSelection()) == null ? void 0 : _g.isCollapsed))) {
         event.preventDefault();
         if (this.article.hasClass("is-editing")) {
-          const title = (_f = (_e = this.editorTitleInput) == null ? void 0 : _e.value) != null ? _f : "";
-          const body = (_h = (_g = this.editorTextarea) == null ? void 0 : _g.value) != null ? _h : "";
+          const title = (_i = (_h = this.editorTitleInput) == null ? void 0 : _h.value) != null ? _i : "";
+          const body = (_k = (_j = this.editorTextarea) == null ? void 0 : _j.value) != null ? _k : "";
           void this.finishEditing(joinMemoContent(title, body));
         } else {
           void this.startEditing();
@@ -2150,7 +2155,7 @@ var MemoList = class {
     }
     let previousGroup = "";
     for (const memo of this.memos) {
-      const group = getDateGroup(memo);
+      const group = memo.pinned ? "\u7F6E\u9876" : getDateGroup(memo);
       if (group !== previousGroup) {
         this.listEl.createDiv({ cls: "obsidian-memos-list-group", text: group });
         previousGroup = group;
@@ -2179,6 +2184,7 @@ var MemoList = class {
       if (memo.pinned) {
         const pin = titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", attr: { "aria-label": "\u5DF2\u7F6E\u9876", title: "\u5DF2\u7F6E\u9876" } });
         (0, import_obsidian10.setIcon)(pin, "pin");
+        this.callbacks.bindPinDrag(pin, memo);
       }
       if (isTaskMemo(memo)) {
         titleRow.createEl("button", {
@@ -2514,6 +2520,7 @@ var MemosView = class extends import_obsidian12.ItemView {
     const listHost = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__body" });
     this.registerDomEvent(listTopButton, "click", () => listHost.scrollTo({ top: 0, behavior: "smooth" }));
     this.memoList = new MemoList(this, listHost, {
+      bindPinDrag: (pin, memo) => this.bindPinDrag(pin, memo),
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
       onDelete: (memo) => this.deleteMemoFromList(memo, true),
@@ -2655,11 +2662,12 @@ var MemosView = class extends import_obsidian12.ItemView {
       contents.createDiv({ cls: "obsidian-memos-mobile-library__contents-empty", text: "\u6682\u65E0\u5185\u5BB9" });
       return;
     }
-    for (const memo of memos.slice(0, 30)) {
+    for (const memo of this.sidebarOrder(memos).slice(0, 30)) {
       const button = contents.createEl("button", {
         cls: "obsidian-memos-mobile-library__content-item",
         attr: { type: "button" }
       });
+      button.dataset.memoPath = memo.file.path;
       const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
       if (memo.pinned) {
         const pin = titleRow.createSpan({
@@ -2667,11 +2675,32 @@ var MemosView = class extends import_obsidian12.ItemView {
           attr: { "aria-label": "\u5DF2\u7F6E\u9876", title: "\u5DF2\u7F6E\u9876" }
         });
         (0, import_obsidian12.setIcon)(pin, "pin");
+        this.bindPinDrag(pin, memo);
       }
       titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
       const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
       button.createDiv({ cls: "obsidian-memos-mobile-library__content-summary", text: preview });
-      this.registerDomEvent(button, "click", () => {
+      this.registerDomEvent(button, "click", async () => {
+        var _a;
+        if (this.plugin.settings.activeMemoNotebookId !== notebookId) {
+          const notebook = this.plugin.settings.memoNotebooks.find((entry) => entry.id === notebookId);
+          if (!notebook) return;
+          await this.selectNotebook(notebook);
+          if (this.plugin.settings.activeMemoNotebookId !== notebookId) return;
+        }
+        if (this.showTrash || !this.memos.some((entry) => entry.file.path === memo.file.path)) {
+          this.showTrash = false;
+          this.searchQuery = "";
+          const search = this.containerEl.querySelector(".obsidian-memos-toolbar__search");
+          if (search) search.value = "";
+          (_a = search == null ? void 0 : search.parentElement) == null ? void 0 : _a.removeClass("has-query");
+          this.plugin.settings.selectedTag = null;
+          this.plugin.settings.selectedFilter = memo.archived ? "archived" : "all";
+          const filter = this.containerEl.querySelector(".obsidian-memos-toolbar__select");
+          if (filter) filter.value = this.plugin.settings.selectedFilter;
+          await this.plugin.saveSettings();
+          await this.refresh(memo.file.path);
+        }
         this.showTrash = false;
         this.mobileDetail = true;
         this.selectMemo(memo);
@@ -2856,6 +2885,10 @@ var MemosView = class extends import_obsidian12.ItemView {
       await card.render();
     }
     host.scrollTop = scrollTop;
+    if (this.pendingScrollPath === this.selectedPath && this.pendingScrollPath) {
+      this.scrollSelectedIntoView(false);
+      this.pendingScrollPath = void 0;
+    }
   }
   beginMemoReorder(memo) {
     var _a, _b, _c;
@@ -2879,10 +2912,11 @@ var MemosView = class extends import_obsidian12.ItemView {
     var _a;
     this.selectedPath = memo.file.path;
     this.mobileDetail = true;
-    (_a = this.memoList) == null ? void 0 : _a.setMemos(this.memos, this.selectedPath);
+    (_a = this.memoList) == null ? void 0 : _a.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
     this.updateLayoutState();
     this.updateSelectedFeedItem();
-    this.scrollSelectedIntoView(true);
+    this.pendingScrollPath = memo.file.path;
+    window.requestAnimationFrame(() => this.scrollSelectedIntoView(false));
   }
   async applyCurrentFilters(preferredPath, sequence = this.refreshSequence) {
     var _a, _b, _c;
@@ -2922,7 +2956,7 @@ var MemosView = class extends import_obsidian12.ItemView {
       this.mobileDetail = false;
     }
     (_b = this.listCountLabel) == null ? void 0 : _b.setText(this.memos.length === this.allMemos.length ? String(this.memos.length) : `${this.memos.length}/${this.allMemos.length}`);
-    (_c = this.memoList) == null ? void 0 : _c.setMemos(this.memos, this.selectedPath);
+    (_c = this.memoList) == null ? void 0 : _c.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
     this.updateLayoutState();
     await this.renderDetail(sequence);
   }
@@ -3004,6 +3038,39 @@ var MemosView = class extends import_obsidian12.ItemView {
       return ((_a = frequency.get(right)) != null ? _a : 0) - ((_b = frequency.get(left)) != null ? _b : 0) || left.localeCompare(right);
     }).slice(0, limit);
   }
+  sidebarOrder(memos) {
+    var _a;
+    const ranks = new Map(((_a = this.plugin.settings.pinnedMemoOrder) != null ? _a : []).map((path, index) => [path, index]));
+    return [...memos].sort((a, b) => {
+      var _a2, _b;
+      return Number(b.pinned) - Number(a.pinned) || (a.pinned && b.pinned ? ((_a2 = ranks.get(a.file.path)) != null ? _a2 : Infinity) - ((_b = ranks.get(b.file.path)) != null ? _b : Infinity) : 0);
+    });
+  }
+  bindPinDrag(pin, memo) {
+    pin.addClass("obsidian-memos-pin-handle");
+    pin.title = "\u62D6\u52A8\u8C03\u6574\u7F6E\u9876\u987A\u5E8F";
+    pin.addEventListener("pointerdown", (event) => {
+      if (!event.isPrimary || event.button !== 0) return;
+      event.stopPropagation();
+      pin.setPointerCapture(event.pointerId);
+    });
+    pin.addEventListener("pointerup", (event) => {
+      var _a, _b, _c;
+      if (!pin.hasPointerCapture(event.pointerId)) return;
+      const row = (_a = pin.ownerDocument.elementFromPoint(event.clientX, event.clientY)) == null ? void 0 : _a.closest("[data-memo-path]");
+      const ordered = this.sidebarOrder(this.allMemos.filter((entry) => entry.pinned)).map((entry) => entry.file.path);
+      const from = ordered.indexOf(memo.file.path);
+      const to = ordered.indexOf((_b = row == null ? void 0 : row.dataset.memoPath) != null ? _b : "");
+      if (from < 0 || to < 0 || from === to) return;
+      ordered.splice(from, 1);
+      ordered.splice(to, 0, memo.file.path);
+      this.plugin.settings.pinnedMemoOrder = ordered;
+      void this.plugin.saveSettings();
+      this.renderMobileLibrary();
+      (_c = this.memoList) == null ? void 0 : _c.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+    });
+    pin.addEventListener("click", (event) => event.stopPropagation());
+  }
   sortMemos(memos) {
     var _a;
     if (this.sortOption === "manual") {
@@ -3014,7 +3081,6 @@ var MemosView = class extends import_obsidian12.ItemView {
       });
     }
     return [...memos].sort((left, right) => {
-      if (left.pinned !== right.pinned) return left.pinned ? -1 : 1;
       let comparison = 0;
       if (this.sortOption === "name-asc" || this.sortOption === "name-desc") {
         comparison = getMemoListTitle(left.content).localeCompare(getMemoListTitle(right.content), "zh-Hans");
@@ -3156,7 +3222,7 @@ var MemosView = class extends import_obsidian12.ItemView {
     const selected = Array.from(items != null ? items : []).find((item) => item.dataset.memoPath === this.selectedPath);
     const host = (_b = this.detailContentEl) == null ? void 0 : _b.querySelector(".obsidian-memos-detail-card-host");
     if (!selected || !host) return;
-    const top = Math.max(0, selected.offsetTop - host.offsetTop);
+    const top = Math.max(0, host.scrollTop + selected.getBoundingClientRect().top - host.getBoundingClientRect().top);
     host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
   }
   async toggleListPane() {

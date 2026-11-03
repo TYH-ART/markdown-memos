@@ -5,6 +5,7 @@ import { splitMemoContent } from "../utils";
 
 
 export interface MemoListPaneCallbacks {
+  bindPinDrag: (pin: HTMLElement, memo: MemoRecord) => void;
   onSelect: (memo: MemoRecord) => void;
   onToggleTask: (memo: MemoRecord) => void;
   onDelete: (memo: MemoRecord) => void | Promise<void>;
@@ -85,7 +86,7 @@ export class MemoList {
 
     let previousGroup = "";
     for (const memo of this.memos) {
-      const group = getDateGroup(memo);
+      const group = memo.pinned ? "置顶" : getDateGroup(memo);
       if (group !== previousGroup) {
         this.listEl.createDiv({ cls: "obsidian-memos-list-group", text: group });
         previousGroup = group;
@@ -114,6 +115,7 @@ export class MemoList {
       if (memo.pinned) {
         const pin = titleRow.createSpan({ cls: "obsidian-memos-list-item__pin", attr: { "aria-label": "已置顶", title: "已置顶" } });
         setIcon(pin, "pin");
+        this.callbacks.bindPinDrag(pin, memo);
       }
       if (isTaskMemo(memo)) {
         titleRow.createEl("button", {

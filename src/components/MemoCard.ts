@@ -89,6 +89,10 @@ export class MemoCard {
         openTextEditingMenu(target, event);
         return;
       }
+      if (this.options.isMobileLayout?.()) {
+        event.stopPropagation();
+        return;
+      }
       event.preventDefault();
       this.openMenu(event);
     });
@@ -102,7 +106,7 @@ export class MemoCard {
         void this.finishEditing(joinMemoContent(title, body));
         return;
       }
-      if (event.detail === 2) {
+      if (event.detail === 2 && !(this.options.isMobileLayout?.() && !this.article.ownerDocument.getSelection()?.isCollapsed)) {
         event.preventDefault();
         if (this.article.hasClass("is-editing")) {
           const title = this.editorTitleInput?.value ?? "";

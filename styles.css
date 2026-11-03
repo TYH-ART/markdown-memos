@@ -2683,3 +2683,17 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .is-mobile .obsidian-memos-toolbar__search::-webkit-search-cancel-button {
   display: none;
 }
+
+.obsidian-memos-view:not(.is-mobile) button.obsidian-memos-mobile-library__item {
+  box-shadow: none;
+  border: 1px solid var(--background-modifier-border);
+}
+
+.obsidian-memos-pin-handle {
+  touch-action: none;
+  cursor: grab;
+}
+
+.is-mobile .obsidian-memos-card__display {
+  -webkit-touch-callout: default;
+}

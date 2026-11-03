@@ -22,6 +22,7 @@ export class MemosView extends ItemView {
   private detailContentEl?: HTMLElement;
   private folderLabel?: HTMLElement;
   private listCountLabel?: HTMLElement;
+  private pendingScrollPath?: string;
   private selectedPath?: string;
   private allMemos: MemoRecord[] = [];
   private memos: MemoRecord[] = [];
@@ -255,6 +256,7 @@ export class MemosView extends ItemView {
     const listHost = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__body" });
     this.registerDomEvent(listTopButton, "click", () => listHost.scrollTo({ top: 0, behavior: "smooth" }));
     this.memoList = new MemoList(this, listHost, {
+      bindPinDrag: (pin, memo) => this.bindPinDrag(pin, memo),
       onSelect: (memo) => this.selectMemo(memo),
       onToggleTask: (memo) => void this.toggleTaskFromList(memo),
       onDelete: (memo) => this.deleteMemoFromList(memo, true),
@@ -403,11 +405,12 @@ export class MemosView extends ItemView {
       contents.createDiv({ cls: "obsidian-memos-mobile-library__contents-empty", text: "暂无内容" });
       return;
     }
-    for (const memo of memos.slice(0, 30)) {
+    for (const memo of this.sidebarOrder(memos).slice(0, 30)) {
       const button = contents.createEl("button", {
         cls: "obsidian-memos-mobile-library__content-item",
         attr: { type: "button" },
       });
+      button.dataset.memoPath = memo.file.path;
       const titleRow = button.createDiv({ cls: "obsidian-memos-mobile-library__content-title-row" });
       if (memo.pinned) {
         const pin = titleRow.createSpan({
@@ -415,11 +418,31 @@ export class MemosView extends ItemView {
           attr: { "aria-label": "已置顶", title: "已置顶" },
         });
         setIcon(pin, "pin");
+        this.bindPinDrag(pin, memo);
       }
       titleRow.createSpan({ cls: "obsidian-memos-mobile-library__content-title", text: getMemoListTitle(memo.content) });
       const preview = [formatListDate(memo.modified), getSummary(memo.content)].filter(Boolean).join("  ");
       button.createDiv({ cls: "obsidian-memos-mobile-library__content-summary", text: preview });
-      this.registerDomEvent(button, "click", () => {
+      this.registerDomEvent(button, "click", async () => {
+        if (this.plugin.settings.activeMemoNotebookId !== notebookId) {
+          const notebook = this.plugin.settings.memoNotebooks.find(entry => entry.id === notebookId);
+          if (!notebook) return;
+          await this.selectNotebook(notebook);
+          if (this.plugin.settings.activeMemoNotebookId !== notebookId) return;
+        }
+        if (this.showTrash || !this.memos.some(entry => entry.file.path === memo.file.path)) {
+          this.showTrash = false;
+          this.searchQuery = "";
+          const search = this.containerEl.querySelector<HTMLInputElement>(".obsidian-memos-toolbar__search");
+          if (search) search.value = "";
+          search?.parentElement?.removeClass("has-query");
+          this.plugin.settings.selectedTag = null;
+          this.plugin.settings.selectedFilter = memo.archived ? "archived" : "all";
+          const filter = this.containerEl.querySelector<HTMLSelectElement>(".obsidian-memos-toolbar__select");
+          if (filter) filter.value = this.plugin.settings.selectedFilter;
+          await this.plugin.saveSettings();
+          await this.refresh(memo.file.path);
+        }
         this.showTrash = false;
         this.mobileDetail = true;
         this.selectMemo(memo);
@@ -617,6 +640,10 @@ export class MemosView extends ItemView {
       await card.render();
     }
     host.scrollTop = scrollTop;
+    if (this.pendingScrollPath === this.selectedPath && this.pendingScrollPath) {
+      this.scrollSelectedIntoView(false);
+      this.pendingScrollPath = undefined;
+    }
   }
 
   private beginMemoReorder(memo: MemoRecord): void {
@@ -640,10 +667,11 @@ export class MemosView extends ItemView {
   private selectMemo(memo: MemoRecord): void {
     this.selectedPath = memo.file.path;
     this.mobileDetail = true;
-    this.memoList?.setMemos(this.memos, this.selectedPath);
+    this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
     this.updateLayoutState();
     this.updateSelectedFeedItem();
-    this.scrollSelectedIntoView(true);
+    this.pendingScrollPath = memo.file.path;
+    window.requestAnimationFrame(() => this.scrollSelectedIntoView(false));
   }
 
   private async applyCurrentFilters(preferredPath?: string, sequence = this.refreshSequence): Promise<void> {
@@ -686,7 +714,7 @@ export class MemosView extends ItemView {
       this.mobileDetail = false;
     }
     this.listCountLabel?.setText(this.memos.length === this.allMemos.length ? String(this.memos.length) : `${this.memos.length}/${this.allMemos.length}`);
-    this.memoList?.setMemos(this.memos, this.selectedPath);
+    this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
     this.updateLayoutState();
     await this.renderDetail(sequence);
   }
@@ -774,13 +802,43 @@ export class MemosView extends ItemView {
       .slice(0, limit);
   }
 
+  private sidebarOrder(memos: MemoRecord[]): MemoRecord[] {
+    const ranks = new Map((this.plugin.settings.pinnedMemoOrder ?? []).map((path, index) => [path, index]));
+    return [...memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) ||
+      (a.pinned && b.pinned ? (ranks.get(a.file.path) ?? Infinity) - (ranks.get(b.file.path) ?? Infinity) : 0));
+  }
+
+  private bindPinDrag(pin: HTMLElement, memo: MemoRecord): void {
+    pin.addClass("obsidian-memos-pin-handle");
+    pin.title = "拖动调整置顶顺序";
+    pin.addEventListener("pointerdown", event => {
+      if (!event.isPrimary || event.button !== 0) return;
+      event.stopPropagation();
+      pin.setPointerCapture(event.pointerId);
+    });
+    pin.addEventListener("pointerup", event => {
+      if (!pin.hasPointerCapture(event.pointerId)) return;
+      const row = pin.ownerDocument.elementFromPoint(event.clientX, event.clientY)?.closest<HTMLElement>("[data-memo-path]");
+      const ordered = this.sidebarOrder(this.allMemos.filter(entry => entry.pinned)).map(entry => entry.file.path);
+      const from = ordered.indexOf(memo.file.path);
+      const to = ordered.indexOf(row?.dataset.memoPath ?? "");
+      if (from < 0 || to < 0 || from === to) return;
+      ordered.splice(from, 1);
+      ordered.splice(to, 0, memo.file.path);
+      this.plugin.settings.pinnedMemoOrder = ordered;
+      void this.plugin.saveSettings();
+      this.renderMobileLibrary();
+      this.memoList?.setMemos(this.sidebarOrder(this.memos), this.selectedPath);
+    });
+    pin.addEventListener("click", event => event.stopPropagation());
+  }
+
   private sortMemos(memos: MemoRecord[]): MemoRecord[] {
     if (this.sortOption === "manual") {
       const order = new Map((this.plugin.settings.manualMemoOrder ?? []).map((path, index) => [path, index]));
       return [...memos].sort((a, b) => (order.get(a.file.path) ?? -1) - (order.get(b.file.path) ?? -1) || b.created.getTime() - a.created.getTime());
     }
     return [...memos].sort((left, right) => {
-      if (left.pinned !== right.pinned) return left.pinned ? -1 : 1;
       let comparison = 0;
       if (this.sortOption === "name-asc" || this.sortOption === "name-desc") {
         comparison = getMemoListTitle(left.content).localeCompare(getMemoListTitle(right.content), "zh-Hans");
@@ -931,7 +989,7 @@ export class MemosView extends ItemView {
     const selected = Array.from(items ?? []).find((item) => item.dataset.memoPath === this.selectedPath);
     const host = this.detailContentEl?.querySelector<HTMLElement>(".obsidian-memos-detail-card-host");
     if (!selected || !host) return;
-    const top = Math.max(0, selected.offsetTop - host.offsetTop);
+    const top = Math.max(0, host.scrollTop + selected.getBoundingClientRect().top - host.getBoundingClientRect().top);
     host.scrollTo({ top, behavior: smooth ? "smooth" : "auto" });
   }
 
