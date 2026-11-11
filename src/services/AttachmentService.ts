@@ -92,13 +92,11 @@ export class AttachmentService {
       return;
     }
     try {
-      if (isWordDocument(attachment.name, attachment.mime)) {
-        const app = this.app as App & { openWithDefaultApp?: (vaultPath: string) => Promise<void> };
-        if (!app.openWithDefaultApp) throw new Error("当前 Obsidian 版本无法调用系统应用");
-        await app.openWithDefaultApp(file.path);
-      } else {
-        await this.app.workspace.getLeaf(true).openFile(file);
-      }
+      // Match opening the file from the desktop, without allocating an empty
+      // Obsidian leaf before handing the file to its associated application.
+      const app = this.app as App & { openWithDefaultApp?: (vaultPath: string) => Promise<void> };
+      if (!app.openWithDefaultApp) throw new Error("当前 Obsidian 版本无法调用系统应用");
+      await app.openWithDefaultApp(file.path);
     } catch (error) {
       new Notice(`打开失败：${errorMessage(error)}`);
     }

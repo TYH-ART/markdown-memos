@@ -2720,22 +2720,14 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   pointer-events: auto; box-shadow: var(--shadow-s);
 }
 .memos-selection-toolbar button {
-  display: flex; flex-direction: column; gap: 4px; align-items: center; height: auto;
-  border: 0; box-shadow: none; background: transparent; color: inherit; padding: 6px 10px;
+  display: flex; flex-direction: column; gap: 2px; align-items: center; justify-content: center;
+  min-width: 44px; height: 44px; min-height: 44px; border-radius: 6px;
+  font-size: 12px; line-height: 16px;
+  border: 0; box-shadow: none; background: transparent; color: inherit; padding: 4px 8px;
 }
 .memos-selection-toolbar[hidden], .memos-selection-toolbar button[hidden] { display: none; }
-.memos-selection-toolbar button.is-copy {
-  width: 36px;
-  height: 36px;
-  min-width: 36px;
-  min-height: 36px;
-  padding: 8px;
-  gap: 0;
-  justify-content: center;
-  border-radius: 6px;
-}
-.memos-selection-toolbar button.is-copy > span { display: flex; }
-.memos-selection-toolbar button.is-copy svg { width: 20px; height: 20px; }
+.memos-selection-toolbar button > span { display: flex; }
+.memos-selection-toolbar button svg { width: 18px; height: 18px; }
 .memos-selection-grip {
   position: absolute; width: 32px; height: 34px; transform: translate(-50%, -3px);
   touch-action: none; pointer-events: auto;
@@ -2799,30 +2791,25 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 }
 
 .obsidian-memos-mobile-upload-choices { display: none; }
-.is-mobile .obsidian-memos-composer__tools { position: relative; }
 .is-mobile .obsidian-memos-mobile-upload-choices:not([hidden]) {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  z-index: 20;
   display: flex;
-  gap: 8px;
-  padding: 8px;
-  border: 1px solid var(--background-modifier-border);
-  border-radius: 12px;
-  background: var(--background-primary);
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px 10px;
 }
 .is-mobile .obsidian-memos-mobile-upload-choices > button {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 44px;
-  height: 44px;
-  padding: 10px;
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
   border: 0;
   border-radius: 8px;
-  color: var(--text-normal);
+  color: var(--text-muted);
   background: var(--background-secondary);
   box-shadow: none;
 }
-.is-mobile .obsidian-memos-mobile-upload-choices svg { width: 24px; height: 24px; }
+.is-mobile .obsidian-memos-mobile-upload-choices svg { width: 20px; height: 20px; }

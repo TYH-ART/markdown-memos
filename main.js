@@ -787,13 +787,9 @@ var AttachmentService = class {
       return;
     }
     try {
-      if (isWordDocument(attachment.name, attachment.mime)) {
-        const app = this.app;
-        if (!app.openWithDefaultApp) throw new Error("\u5F53\u524D Obsidian \u7248\u672C\u65E0\u6CD5\u8C03\u7528\u7CFB\u7EDF\u5E94\u7528");
-        await app.openWithDefaultApp(file.path);
-      } else {
-        await this.app.workspace.getLeaf(true).openFile(file);
-      }
+      const app = this.app;
+      if (!app.openWithDefaultApp) throw new Error("\u5F53\u524D Obsidian \u7248\u672C\u65E0\u6CD5\u8C03\u7528\u7CFB\u7EDF\u5E94\u7528");
+      await app.openWithDefaultApp(file.path);
     } catch (error) {
       new import_obsidian5.Notice(`\u6253\u5F00\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }
@@ -918,9 +914,6 @@ function sanitizeFilename(name) {
     result += character;
   }
   return (result || "attachment") + ext;
-}
-function isWordDocument(name, mime) {
-  return /\.(docx?|docm|dotx?|dotm|rtf)$/i.test(name) || /msword|wordprocessingml|ms-word/i.test(mime);
 }
 function inferMime(filename) {
   var _a, _b, _c;
@@ -1459,10 +1452,9 @@ function bindMobileSelection(display) {
     const marks = overlay.createDiv();
     const toolbar = overlay.createDiv({ cls: "memos-selection-toolbar", attr: { role: "toolbar" } });
     const button = (label, icon, action) => {
-      const el = toolbar.createEl("button", { attr: { type: "button", "aria-label": label } });
+      const el = toolbar.createEl("button", { attr: { type: "button" } });
       (0, import_obsidian7.setIcon)(el.createSpan({ attr: { "aria-hidden": "true" } }), icon);
-      if (icon === "copy") el.addClass("is-copy");
-      else el.createSpan({ text: label });
+      el.createSpan({ text: label });
       el.addEventListener("click", action, options);
       return el;
     };
@@ -2560,7 +2552,7 @@ var MemoComposer = class {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
     });
-    const uploadChoices = tools.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
+    const uploadChoices = composer.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
     uploadChoices.hidden = true;
     const closeUploadChoices = () => {
       uploadChoices.hidden = true;
@@ -2787,7 +2779,7 @@ var MemoComposer = class {
     this.renderPendingAttachments();
   }
   async openPendingAttachment(attachment) {
-    var _a, _b, _c, _d;
+    var _a, _b, _c;
     if (attachment.kind === "vault") {
       await ((_a = this.attachmentService) == null ? void 0 : _a.openAttachment({
         path: attachment.file.path,
@@ -2802,26 +2794,20 @@ var MemoComposer = class {
       (_b = this.attachmentService) == null ? void 0 : _b.previewImage(attachment.previewUrl, attachment.name);
       return;
     }
-    if (isWordDocument(attachment.name, attachment.mime)) {
-      try {
-        if (import_obsidian12.Platform.isDesktopApp) {
-          const path = getDesktopUploadPath(attachment.file);
-          if (!path) throw new Error("\u8BF7\u5148\u4FDD\u5B58\u8FD9\u6761\u5907\u5FD8\u5F55\uFF0C\u518D\u6253\u5F00 Word \u9644\u4EF6");
-          const message = await require("electron").shell.openPath(path);
-          if (message) throw new Error(message);
-        } else if ((_c = navigator.canShare) == null ? void 0 : _c.call(navigator, { files: [attachment.file] })) {
-          await navigator.share({ files: [attachment.file], title: attachment.name });
-        } else {
-          throw new Error("\u8BF7\u5148\u4FDD\u5B58\u8FD9\u6761\u5907\u5FD8\u5F55\uFF0C\u518D\u6253\u5F00 Word \u9644\u4EF6");
-        }
-      } catch (error) {
-        if (!(error instanceof Error && error.name === "AbortError")) new import_obsidian12.Notice(errorMessage(error));
+    try {
+      if (import_obsidian12.Platform.isDesktopApp) {
+        const path = getDesktopUploadPath(attachment.file);
+        if (!path) throw new Error("\u8BF7\u5148\u4FDD\u5B58\u8FD9\u6761\u5907\u5FD8\u5F55\uFF0C\u518D\u7528\u7CFB\u7EDF\u5E94\u7528\u6253\u5F00\u9644\u4EF6");
+        const message = await require("electron").shell.openPath(path);
+        if (message) throw new Error(message);
+      } else if ((_c = navigator.canShare) == null ? void 0 : _c.call(navigator, { files: [attachment.file] })) {
+        await navigator.share({ files: [attachment.file], title: attachment.name });
+      } else {
+        throw new Error("\u8BF7\u5148\u4FDD\u5B58\u8FD9\u6761\u5907\u5FD8\u5F55\uFF0C\u518D\u7528\u7CFB\u7EDF\u5E94\u7528\u6253\u5F00\u9644\u4EF6");
       }
-      return;
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) new import_obsidian12.Notice(errorMessage(error));
     }
-    const url = (_d = attachment.previewUrl) != null ? _d : URL.createObjectURL(attachment.file);
-    window.open(url, "_blank");
-    if (!attachment.previewUrl) window.setTimeout(() => URL.revokeObjectURL(url), 1e3);
   }
   async downloadPendingAttachment(attachment) {
     var _a, _b;

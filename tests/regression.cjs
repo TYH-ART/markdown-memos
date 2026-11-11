@@ -270,7 +270,7 @@ test('Reading Copy uses the editor label and copies exactly the text selected be
   assert.equal(api.openReadingCopyMenu(container, event), false);
 });
 
-test('Image and Word attachments open without creating an Obsidian leaf', async () => {
+test('Images and external attachments open without creating an Obsidian leaf', async () => {
   class TFile {}
   class Modal {
     constructor() {
@@ -288,10 +288,36 @@ test('Image and Word attachments open without creating an Obsidian leaf', async 
   const service = new AttachmentService(app, {}, () => ({}));
   await service.openAttachment({ path: file.path, name: file.name, mime: 'image/png' });
   assert.ok(previewed);
-  file.path = 'files/report.DOCX';
-  file.name = 'report.DOCX';
-  await service.openAttachment({ path: file.path, name: file.name, mime: 'application/octet-stream' });
-  assert.equal(opened, file.path);
+  // No workspace is provided: allocating a leaf for any of these must fail.
+  for (const name of ['report.DOCX', '思维导图.xmind', '表格.xlsx', '备份.zip', '文档.pdf', '笔记.md', '声音.mp3', '未知.abc']) {
+    file.path = 'files/' + name;
+    file.name = name;
+    await service.openAttachment({ path: file.path, name: file.name, mime: 'application/octet-stream' });
+    assert.equal(opened, file.path);
+  }
+});
+
+test('Even registered attachment types use the system app; an external-open failure creates no tab', async () => {
+  class TFile {}
+  const notices = [], internal = [], external = [];
+  let file;
+  const app = {
+    vault: { getAbstractFileByPath: () => file },
+    viewRegistry: { getTypeByExtension: extension => ({ md: 'markdown', pdf: 'pdf', custom: 'plugin-view' })[extension] },
+    workspace: { getLeaf: () => ({ openFile: async file => internal.push(file.path) }) },
+    openWithDefaultApp: async path => { external.push(path); throw new Error('系统应用不可用'); },
+  };
+  const { AttachmentService } = load('src/services/AttachmentService.ts', {
+    obsidian: { TFile, Notice: class { constructor(text) { notices.push(text); } }, FuzzySuggestModal: class {} },
+  });
+  const service = new AttachmentService(app, {}, () => ({}));
+  for (const extension of ['md', 'pdf', 'custom', 'xmind']) {
+    file = Object.assign(new TFile(), { path: 'files/test.' + extension, name: 'test.' + extension, extension });
+    await service.openAttachment({ path: file.path, name: file.name, mime: 'application/octet-stream' });
+  }
+  assert.deepEqual(internal, []);
+  assert.deepEqual(external, ['files/test.md', 'files/test.pdf', 'files/test.custom', 'files/test.xmind']);
+  assert.match(notices[0], /系统应用不可用/);
 });
 
 test('Sidebar copy and title paste omit storage blank lines while preserving indentation and paragraph breaks', () => {

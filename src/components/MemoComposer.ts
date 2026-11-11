@@ -1,7 +1,7 @@
 import { Menu, Notice, Platform, setIcon } from "obsidian";
 import type { Component, TFile } from "obsidian";
 import type { AttachmentService } from "../services/AttachmentService";
-import { inferMime, isWordDocument } from "../services/AttachmentService";
+import { inferMime } from "../services/AttachmentService";
 import { type MobileUploadSource, getDesktopUploadPath } from "../services/UploadPicker";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoRecord, MemoType } from "../types";
@@ -147,7 +147,7 @@ export class MemoComposer {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
     });
-    const uploadChoices = tools.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
+    const uploadChoices = composer.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
     uploadChoices.hidden = true;
     const closeUploadChoices = () => {
       uploadChoices.hidden = true;
@@ -398,26 +398,20 @@ export class MemoComposer {
       this.attachmentService?.previewImage(attachment.previewUrl, attachment.name);
       return;
     }
-    if (isWordDocument(attachment.name, attachment.mime)) {
-      try {
-        if (Platform.isDesktopApp) {
-          const path = getDesktopUploadPath(attachment.file);
-          if (!path) throw new Error("请先保存这条备忘录，再打开 Word 附件");
-          const message = await (require("electron") as { shell: { openPath(path: string): Promise<string> } }).shell.openPath(path);
-          if (message) throw new Error(message);
-        } else if (navigator.canShare?.({ files: [attachment.file] })) {
-          await navigator.share({ files: [attachment.file], title: attachment.name });
-        } else {
-          throw new Error("请先保存这条备忘录，再打开 Word 附件");
-        }
-      } catch (error) {
-        if (!(error instanceof Error && error.name === "AbortError")) new Notice(errorMessage(error));
+    try {
+      if (Platform.isDesktopApp) {
+        const path = getDesktopUploadPath(attachment.file);
+        if (!path) throw new Error("请先保存这条备忘录，再用系统应用打开附件");
+        const message = await (require("electron") as { shell: { openPath(path: string): Promise<string> } }).shell.openPath(path);
+        if (message) throw new Error(message);
+      } else if (navigator.canShare?.({ files: [attachment.file] })) {
+        await navigator.share({ files: [attachment.file], title: attachment.name });
+      } else {
+        throw new Error("请先保存这条备忘录，再用系统应用打开附件");
       }
-      return;
+    } catch (error) {
+      if (!(error instanceof Error && error.name === "AbortError")) new Notice(errorMessage(error));
     }
-    const url = attachment.previewUrl ?? URL.createObjectURL(attachment.file);
-    window.open(url, "_blank");
-    if (!attachment.previewUrl) window.setTimeout(() => URL.revokeObjectURL(url), 1000);
   }
 
   private async downloadPendingAttachment(attachment: PendingAttachment): Promise<void> {
