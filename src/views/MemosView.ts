@@ -206,14 +206,6 @@ export class MemosView extends ItemView {
     const listPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-list-pane" });
     const mobileLibrary = listPaneEl.createDiv({ cls: "obsidian-memos-mobile-library" });
     const mobileLibraryUpper = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__upper" });
-    const mobileLibraryHeader = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__header" });
-    mobileLibraryHeader.createEl("strong", { text: "备忘录" });
-    const addNotebookButton = mobileLibraryHeader.createEl("button", {
-      cls: "clickable-icon obsidian-memos-mobile-library__add",
-      attr: { type: "button", "aria-label": "新建备忘录", title: "新建备忘录" },
-    });
-    setIcon(addNotebookButton, "plus");
-    this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.mobileNotebookList = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__list" });
     const libraryFooter = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__footer" });
     this.mobileTrashButton = libraryFooter.createEl("button", {
@@ -231,6 +223,12 @@ export class MemosView extends ItemView {
     libraryFooter.prepend(this.mobileSettingsButton);
     setIcon(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
+    const addNotebookButton = libraryFooter.createEl("button", {
+      cls: "clickable-icon obsidian-memos-mobile-library__add",
+      attr: { type: "button", "aria-label": "新建备忘录", title: "新建备忘录" },
+    });
+    setIcon(addNotebookButton, "plus");
+    this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.renderMobileLibrary();
     const listHeader = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__header" });
     const listTopButton = listHeader.createEl("button", {

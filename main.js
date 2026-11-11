@@ -3201,14 +3201,6 @@ var MemosView = class extends import_obsidian15.ItemView {
     const listPaneEl = this.splitEl.createDiv({ cls: "obsidian-memos-list-pane" });
     const mobileLibrary = listPaneEl.createDiv({ cls: "obsidian-memos-mobile-library" });
     const mobileLibraryUpper = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__upper" });
-    const mobileLibraryHeader = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__header" });
-    mobileLibraryHeader.createEl("strong", { text: "\u5907\u5FD8\u5F55" });
-    const addNotebookButton = mobileLibraryHeader.createEl("button", {
-      cls: "clickable-icon obsidian-memos-mobile-library__add",
-      attr: { type: "button", "aria-label": "\u65B0\u5EFA\u5907\u5FD8\u5F55", title: "\u65B0\u5EFA\u5907\u5FD8\u5F55" }
-    });
-    (0, import_obsidian15.setIcon)(addNotebookButton, "plus");
-    this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.mobileNotebookList = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__list" });
     const libraryFooter = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__footer" });
     this.mobileTrashButton = libraryFooter.createEl("button", {
@@ -3226,6 +3218,12 @@ var MemosView = class extends import_obsidian15.ItemView {
     libraryFooter.prepend(this.mobileSettingsButton);
     (0, import_obsidian15.setIcon)(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
+    const addNotebookButton = libraryFooter.createEl("button", {
+      cls: "clickable-icon obsidian-memos-mobile-library__add",
+      attr: { type: "button", "aria-label": "\u65B0\u5EFA\u5907\u5FD8\u5F55", title: "\u65B0\u5EFA\u5907\u5FD8\u5F55" }
+    });
+    (0, import_obsidian15.setIcon)(addNotebookButton, "plus");
+    this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.renderMobileLibrary();
     const listHeader = listPaneEl.createDiv({ cls: "obsidian-memos-list-pane__header" });
     const listTopButton = listHeader.createEl("button", {
