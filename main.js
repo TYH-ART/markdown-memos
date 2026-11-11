@@ -478,7 +478,11 @@ function getDesktopUploadPath(file) {
     return "";
   }
 }
-async function pickUploadFiles(app, accept, mimeFor) {
+async function pickUploadFiles(app, accept, mimeFor, mobileSource) {
+  if (mobileSource) {
+    const filter = mobileSource === "album" ? "image/*,video/*" : mobileSource === "camera" ? "image/*" : "*/*";
+    return pickBrowserFiles(app, filter, mobileSource === "camera");
+  }
   if (accept === "*/*") {
     const dialog = import_obsidian3.Platform.isDesktopApp ? getDesktopDialog() : void 0;
     if (dialog) {
@@ -516,9 +520,13 @@ async function pickUploadFiles(app, accept, mimeFor) {
       }
     }
   }
+  return pickBrowserFiles(app, accept);
+}
+function pickBrowserFiles(app, accept, camera = false) {
   return new Promise((resolve) => {
     const input = app.workspace.containerEl.createEl("input", { type: "file" });
-    input.multiple = true;
+    input.multiple = !camera;
+    if (camera) input.setAttribute("capture", "environment");
     input.accept = accept;
     input.hidden = true;
     const finish = (files) => {
@@ -715,8 +723,8 @@ var AttachmentService = class {
     const files = await this.pickExternalAttachments();
     return this.addExternalFiles(memoFile, files);
   }
-  pickExternalAttachments(accept = "*/*") {
-    return pickUploadFiles(this.app, accept, inferMime);
+  pickExternalAttachments(accept = "*/*", mobileSource) {
+    return pickUploadFiles(this.app, accept, inferMime, mobileSource);
   }
   async addExternalFiles(memoFile, files) {
     if (files.length === 0) {
@@ -2552,7 +2560,42 @@ var MemoComposer = class {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
     });
-    owner.registerDomEvent(attachmentButton, "click", () => void this.queueExternalAttachments());
+    const uploadChoices = tools.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
+    uploadChoices.hidden = true;
+    const closeUploadChoices = () => {
+      uploadChoices.hidden = true;
+      attachmentButton.setAttribute("aria-expanded", "false");
+    };
+    if (this.isMobileLayout()) {
+      attachmentButton.setAttribute("aria-expanded", "false");
+      const choices = [
+        { source: "album", icon: "image", label: "\u76F8\u518C" },
+        { source: "camera", icon: "camera", label: "\u62CD\u6444" },
+        { source: "files", icon: "folder", label: "\u6587\u4EF6" }
+      ];
+      for (const choice of choices) {
+        const button = uploadChoices.createEl("button", { cls: "clickable-icon", attr: { type: "button", "aria-label": choice.label } });
+        (0, import_obsidian12.setIcon)(button, choice.icon);
+        owner.registerDomEvent(button, "click", () => {
+          closeUploadChoices();
+          void this.queueExternalAttachments(choice.source);
+        });
+      }
+      owner.registerDomEvent(container.ownerDocument, "pointerdown", (event) => {
+        if (!uploadChoices.contains(event.target) && !attachmentButton.contains(event.target)) closeUploadChoices();
+      });
+      owner.registerDomEvent(container.ownerDocument, "keydown", (event) => {
+        if (event.key === "Escape") closeUploadChoices();
+      });
+    }
+    owner.registerDomEvent(attachmentButton, "click", () => {
+      if (!this.isMobileLayout()) {
+        void this.queueExternalAttachments();
+        return;
+      }
+      uploadChoices.hidden = !uploadChoices.hidden;
+      attachmentButton.setAttribute("aria-expanded", String(!uploadChoices.hidden));
+    });
     owner.registerDomEvent(attachmentButton, "contextmenu", (event) => {
       event.preventDefault();
       const menu = new import_obsidian12.Menu();
@@ -2674,10 +2717,10 @@ var MemoComposer = class {
     renderTextWithTags(this.titleMirror, this.titleInput.value || " ");
     renderTextWithTags(this.bodyMirror, this.textarea.value || " ");
   }
-  async queueExternalAttachments() {
+  async queueExternalAttachments(mobileSource) {
     if (!this.attachmentService) return;
     try {
-      this.addPendingExternalFiles(await this.attachmentService.pickExternalAttachments());
+      this.addPendingExternalFiles(await this.attachmentService.pickExternalAttachments("*/*", mobileSource));
     } catch (error) {
       new import_obsidian12.Notice(`\u9009\u62E9\u9644\u4EF6\u5931\u8D25\uFF1A${errorMessage(error)}`);
     }

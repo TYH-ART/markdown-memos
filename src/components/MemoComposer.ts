@@ -2,7 +2,7 @@ import { Menu, Notice, Platform, setIcon } from "obsidian";
 import type { Component, TFile } from "obsidian";
 import type { AttachmentService } from "../services/AttachmentService";
 import { inferMime, isWordDocument } from "../services/AttachmentService";
-import { getDesktopUploadPath } from "../services/UploadPicker";
+import { type MobileUploadSource, getDesktopUploadPath } from "../services/UploadPicker";
 import type { MemoRepository } from "../services/MemoRepository";
 import type { MemoRecord, MemoType } from "../types";
 import { errorMessage, joinMemoContent } from "../utils";
@@ -147,7 +147,39 @@ export class MemoComposer {
       this.bodyMirror.scrollTop = this.textarea.scrollTop;
       this.bodyMirror.scrollLeft = this.textarea.scrollLeft;
     });
-    owner.registerDomEvent(attachmentButton, "click", () => void this.queueExternalAttachments());
+    const uploadChoices = tools.createDiv({ cls: "obsidian-memos-mobile-upload-choices" });
+    uploadChoices.hidden = true;
+    const closeUploadChoices = () => {
+      uploadChoices.hidden = true;
+      attachmentButton.setAttribute("aria-expanded", "false");
+    };
+    if (this.isMobileLayout()) {
+      attachmentButton.setAttribute("aria-expanded", "false");
+      const choices: { source: MobileUploadSource; icon: string; label: string }[] = [
+        { source: "album", icon: "image", label: "相册" },
+        { source: "camera", icon: "camera", label: "拍摄" },
+        { source: "files", icon: "folder", label: "文件" },
+      ];
+      for (const choice of choices) {
+        const button = uploadChoices.createEl("button", { cls: "clickable-icon", attr: { type: "button", "aria-label": choice.label } });
+        setIcon(button, choice.icon);
+        owner.registerDomEvent(button, "click", () => {
+          closeUploadChoices();
+          void this.queueExternalAttachments(choice.source);
+        });
+      }
+      owner.registerDomEvent(container.ownerDocument, "pointerdown", (event: PointerEvent) => {
+        if (!uploadChoices.contains(event.target as Node) && !attachmentButton.contains(event.target as Node)) closeUploadChoices();
+      });
+      owner.registerDomEvent(container.ownerDocument, "keydown", (event: KeyboardEvent) => {
+        if (event.key === "Escape") closeUploadChoices();
+      });
+    }
+    owner.registerDomEvent(attachmentButton, "click", () => {
+      if (!this.isMobileLayout()) { void this.queueExternalAttachments(); return; }
+      uploadChoices.hidden = !uploadChoices.hidden;
+      attachmentButton.setAttribute("aria-expanded", String(!uploadChoices.hidden));
+    });
     owner.registerDomEvent(attachmentButton, "contextmenu", (event: MouseEvent) => {
       event.preventDefault();
       const menu = new Menu();
@@ -279,10 +311,10 @@ export class MemoComposer {
     renderTextWithTags(this.bodyMirror, this.textarea.value || " ");
   }
 
-  private async queueExternalAttachments(): Promise<void> {
+  private async queueExternalAttachments(mobileSource?: MobileUploadSource): Promise<void> {
     if (!this.attachmentService) return;
     try {
-      this.addPendingExternalFiles(await this.attachmentService.pickExternalAttachments());
+      this.addPendingExternalFiles(await this.attachmentService.pickExternalAttachments("*/*", mobileSource));
     } catch (error) {
       new Notice(`选择附件失败：${errorMessage(error)}`);
     }

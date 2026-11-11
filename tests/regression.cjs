@@ -564,3 +564,26 @@ test('Mouse double click in mobile emulation enters editing and does not immedia
   sendAt('dblclick', 182);
   assert.equal(edits, 1);
 });
+
+test('Mobile upload routes album, camera and files to the intended system picker', async () => {
+  for (const source of ['album', 'camera', 'files']) {
+    let input;
+    const selected = { name: 'sample.png' };
+    const app = { workspace: { containerEl: {
+      createEl() {
+        input = new EventTarget();
+        Object.assign(input, {
+          attributes: {}, setAttribute(k, v) { this.attributes[k] = v; }, remove() { this.removed = true; },
+          files: [selected], click() { this.dispatchEvent(new Event('change')); },
+        });
+        return input;
+      },
+    } } };
+    const { pickUploadFiles } = load('src/services/UploadPicker.ts', { obsidian: { Platform: { isDesktopApp: true } } });
+    assert.deepEqual(await pickUploadFiles(app, '*/*', () => '', source), [selected]);
+    assert.equal(input.accept, source === 'album' ? 'image/*,video/*' : source === 'camera' ? 'image/*' : '*/*');
+    assert.equal(input.attributes.capture, source === 'camera' ? 'environment' : undefined);
+    assert.equal(input.multiple, source !== 'camera');
+    assert.ok(input.removed);
+  }
+});

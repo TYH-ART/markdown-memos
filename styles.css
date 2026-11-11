@@ -2795,5 +2795,34 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
 }
 .obsidian-memos-view.is-mobile .obsidian-memos-mobile-library__footer {
-  padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(88px + env(safe-area-inset-bottom, 0px));
 }
+
+.obsidian-memos-mobile-upload-choices { display: none; }
+.is-mobile .obsidian-memos-composer__tools { position: relative; }
+.is-mobile .obsidian-memos-mobile-upload-choices:not([hidden]) {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  padding: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 12px;
+  background: var(--background-primary);
+}
+.is-mobile .obsidian-memos-mobile-upload-choices > button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  padding: 10px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--text-normal);
+  background: var(--background-secondary);
+  box-shadow: none;
+}
+.is-mobile .obsidian-memos-mobile-upload-choices svg { width: 24px; height: 24px; }

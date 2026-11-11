@@ -16,7 +16,13 @@ export function getDesktopUploadPath(file: File): string {
   }
 }
 
-export async function pickUploadFiles(app: App, accept: string, mimeFor: (name: string) => string): Promise<File[]> {
+export type MobileUploadSource = "album" | "camera" | "files";
+
+export async function pickUploadFiles(app: App, accept: string, mimeFor: (name: string) => string, mobileSource?: MobileUploadSource): Promise<File[]> {
+  if (mobileSource) {
+    const filter = mobileSource === "album" ? "image/*,video/*" : mobileSource === "camera" ? "image/*" : "*/*";
+    return pickBrowserFiles(app, filter, mobileSource === "camera");
+  }
   if (accept === "*/*") {
     const dialog = Platform.isDesktopApp ? getDesktopDialog() : undefined;
     if (dialog) {
@@ -58,9 +64,14 @@ export async function pickUploadFiles(app: App, accept: string, mimeFor: (name: 
     }
   }
 
+  return pickBrowserFiles(app, accept);
+}
+
+function pickBrowserFiles(app: App, accept: string, camera = false): Promise<File[]> {
   return new Promise(resolve => {
     const input = app.workspace.containerEl.createEl("input", { type: "file" });
-    input.multiple = true;
+    input.multiple = !camera;
+    if (camera) input.setAttribute("capture", "environment");
     input.accept = accept;
     input.hidden = true;
     const finish = (files: File[]) => {

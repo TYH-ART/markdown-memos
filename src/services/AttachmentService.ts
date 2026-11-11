@@ -2,7 +2,7 @@ import { App, FuzzySuggestModal, Modal, normalizePath, Notice, TFile, TFolder } 
 import type { MemoAttachment, ObsidianMemosSettings } from "../types";
 import { errorMessage, formatMemoBasename, normalizeMemoFolder } from "../utils";
 import type { MemoRepository } from "./MemoRepository";
-import { pickUploadFiles } from "./UploadPicker";
+import { pickUploadFiles, type MobileUploadSource } from "./UploadPicker";
 import { exportBinaryFile } from "./FileExport";
 
 export class AttachmentService {
@@ -22,8 +22,8 @@ export class AttachmentService {
     return this.addExternalFiles(memoFile, files);
   }
 
-  public pickExternalAttachments(accept = "*/*"): Promise<File[]> {
-    return pickUploadFiles(this.app, accept, inferMime);
+  public pickExternalAttachments(accept = "*/*", mobileSource?: MobileUploadSource): Promise<File[]> {
+    return pickUploadFiles(this.app, accept, inferMime, mobileSource);
   }
 
   public async addExternalFiles(memoFile: TFile, files: File[]): Promise<number> {
