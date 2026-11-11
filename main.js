@@ -3210,18 +3210,20 @@ var MemosView = class extends import_obsidian15.ItemView {
     (0, import_obsidian15.setIcon)(addNotebookButton, "plus");
     this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.mobileNotebookList = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__list" });
-    this.mobileTrashButton = mobileLibrary.createEl("button", {
+    const libraryFooter = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__footer" });
+    this.mobileTrashButton = libraryFooter.createEl("button", {
       cls: "obsidian-memos-mobile-library__trash",
       attr: { type: "button" }
     });
     const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
-    (0, import_obsidian15.setIcon)(trashIcon, "trash-2");
+    (0, import_obsidian15.setIcon)(trashIcon, "trash");
     this.mobileTrashButton.setAttr("aria-label", "\u56DE\u6536\u7AD9");
     this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
-    this.mobileSettingsButton = mobileLibrary.createEl("button", {
+    this.mobileSettingsButton = libraryFooter.createEl("button", {
       cls: "obsidian-memos-mobile-library__settings clickable-icon",
       attr: { type: "button", "aria-label": "Markdown Memos \u8BBE\u7F6E" }
     });
+    libraryFooter.prepend(this.mobileSettingsButton);
     (0, import_obsidian15.setIcon)(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
     this.renderMobileLibrary();

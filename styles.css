@@ -1710,7 +1710,7 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   flex: 1 1 auto;
   flex-direction: column;
   box-sizing: border-box;
-  padding: 0 0 88px;
+  padding: 0;
 }
 
 .is-mobile .obsidian-memos-mobile-library__upper {
@@ -1885,22 +1885,7 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 }
 
 .obsidian-memos-view:not(.is-mobile) .obsidian-memos-mobile-library__settings,
-.is-mobile .obsidian-memos-mobile-library__settings {
-  display: inline-flex;
-  width: 44px;
-  height: 44px;
-  min-height: 44px;
-  flex: 0 0 44px;
-  align-items: center;
-  justify-content: center;
-  align-self: flex-start;
-  margin: 2px 0 8px;
-  padding: 8px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--text-muted);
-}
+
 
 .is-mobile .obsidian-memos-mobile-library__settings {
   position: fixed;
@@ -2798,3 +2783,47 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .memos-selection-grip { width: 44px; height: 44px; }
 .memos-selection-grip[hidden] { display: none; }
 .memos-selection-grip::after { width: 18px; height: 20px; }
+
+
+.obsidian-memos-view .obsidian-memos-mobile-library__footer {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px 8px;
+}
+.obsidian-memos-view .obsidian-memos-mobile-library .obsidian-memos-mobile-library__footer > button {
+  position: static;
+  display: inline-flex;
+  width: 44px;
+  height: 44px;
+  min-height: 44px;
+  flex: 0 0 44px;
+  align-items: center;
+  justify-content: center;
+  align-self: auto;
+  margin: 0;
+  padding: 12px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text-muted);
+  box-shadow: none;
+}
+.obsidian-memos-view .obsidian-memos-mobile-library__footer svg {
+  width: 20px;
+  height: 20px;
+  stroke-width: 1.8px;
+}
+.obsidian-memos-view .obsidian-memos-mobile-library .obsidian-memos-mobile-library__footer > button:hover,
+.obsidian-memos-view .obsidian-memos-mobile-library .obsidian-memos-mobile-library__footer > button:focus-visible {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover);
+}
+.obsidian-memos-view .obsidian-memos-mobile-library .obsidian-memos-mobile-library__footer > button.is-active {
+  color: var(--text-accent);
+  background: color-mix(in srgb, var(--interactive-accent) 18%, var(--background-primary));
+}
+.obsidian-memos-view.is-mobile .obsidian-memos-mobile-library__footer {
+  padding-bottom: calc(44px + env(safe-area-inset-bottom, 0px));
+}

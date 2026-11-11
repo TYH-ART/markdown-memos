@@ -215,18 +215,20 @@ export class MemosView extends ItemView {
     setIcon(addNotebookButton, "plus");
     this.registerDomEvent(addNotebookButton, "click", () => void this.createNotebook());
     this.mobileNotebookList = mobileLibraryUpper.createDiv({ cls: "obsidian-memos-mobile-library__list" });
-    this.mobileTrashButton = mobileLibrary.createEl("button", {
+    const libraryFooter = mobileLibrary.createDiv({ cls: "obsidian-memos-mobile-library__footer" });
+    this.mobileTrashButton = libraryFooter.createEl("button", {
       cls: "obsidian-memos-mobile-library__trash",
       attr: { type: "button" },
     });
     const trashIcon = this.mobileTrashButton.createSpan({ cls: "obsidian-memos-mobile-library__trash-icon", attr: { "aria-hidden": "true" } });
-    setIcon(trashIcon, "trash-2");
+    setIcon(trashIcon, "trash");
     this.mobileTrashButton.setAttr("aria-label", "回收站");
     this.registerDomEvent(this.mobileTrashButton, "click", () => void this.openTrash());
-    this.mobileSettingsButton = mobileLibrary.createEl("button", {
+    this.mobileSettingsButton = libraryFooter.createEl("button", {
       cls: "obsidian-memos-mobile-library__settings clickable-icon",
       attr: { type: "button", "aria-label": "Markdown Memos 设置" },
     });
+    libraryFooter.prepend(this.mobileSettingsButton);
     setIcon(this.mobileSettingsButton, "settings");
     this.registerDomEvent(this.mobileSettingsButton, "click", () => this.openPluginSettings());
     this.renderMobileLibrary();
