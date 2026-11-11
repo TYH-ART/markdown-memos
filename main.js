@@ -1449,11 +1449,12 @@ function bindMobileSelection(display) {
     const overlay = doc.body.createDiv({ cls: "memos-selection-overlay" });
     layer = overlay;
     const marks = overlay.createDiv();
-    const toolbar = overlay.createDiv({ cls: "memos-selection-toolbar", attr: { role: "toolbar", "aria-label": "\u9009\u4E2D\u6587\u5B57" } });
+    const toolbar = overlay.createDiv({ cls: "memos-selection-toolbar", attr: { role: "toolbar" } });
     const button = (label, icon, action) => {
-      const el = toolbar.createEl("button", { attr: { type: "button" } });
+      const el = toolbar.createEl("button", { attr: { type: "button", "aria-label": label } });
       (0, import_obsidian7.setIcon)(el.createSpan({ attr: { "aria-hidden": "true" } }), icon);
-      el.createSpan({ text: label });
+      if (icon === "copy") el.addClass("is-copy");
+      else el.createSpan({ text: label });
       el.addEventListener("click", action, options);
       return el;
     };
@@ -1882,7 +1883,7 @@ function bindMobileDoubleTap(root, canEdit, edit) {
     last = void 0;
   }
   root.addEventListener("pointerdown", (event) => {
-    if (event.pointerType !== "touch" || !event.isPrimary || !canEdit(event.target)) {
+    if (event.button !== 0 || !event.isPrimary || !canEdit(event.target)) {
       reset();
       return;
     }
@@ -1914,6 +1915,13 @@ function bindMobileDoubleTap(root, canEdit, edit) {
       event.stopImmediatePropagation();
     }
   }, true);
+  root.addEventListener("dblclick", (event) => {
+    if (event.timeStamp <= ignoreClickUntil || !canEdit(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    reset();
+    edit();
+  });
 }
 
 // src/components/EditorSizing.ts

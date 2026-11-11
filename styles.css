@@ -2769,6 +2769,18 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
   border: 0; box-shadow: none; background: transparent; color: inherit; padding: 6px 10px;
 }
 .memos-selection-toolbar[hidden], .memos-selection-toolbar button[hidden] { display: none; }
+.memos-selection-toolbar button.is-copy {
+  width: 36px;
+  height: 36px;
+  min-width: 36px;
+  min-height: 36px;
+  padding: 8px;
+  gap: 0;
+  justify-content: center;
+  border-radius: 6px;
+}
+.memos-selection-toolbar button.is-copy > span { display: flex; }
+.memos-selection-toolbar button.is-copy svg { width: 20px; height: 20px; }
 .memos-selection-grip {
   position: absolute; width: 32px; height: 34px; transform: translate(-50%, -3px);
   touch-action: none; pointer-events: auto;

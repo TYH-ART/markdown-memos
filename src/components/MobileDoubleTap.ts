@@ -1,4 +1,4 @@
-/** Recognize two short stationary touch taps, without canceling scroll or long press. */
+/** Recognize two short taps, including mouse input in Obsidian's mobile emulator. */
 export function bindMobileDoubleTap(
   root: HTMLElement,
   canEdit: (target: EventTarget | null) => boolean,
@@ -12,7 +12,7 @@ export function bindMobileDoubleTap(
     last = undefined;
   }
   root.addEventListener("pointerdown", event => {
-    if (event.pointerType !== "touch" || !event.isPrimary || !canEdit(event.target)) {
+    if (event.button !== 0 || !event.isPrimary || !canEdit(event.target)) {
       reset();
       return;
     }
@@ -46,4 +46,11 @@ export function bindMobileDoubleTap(
       event.stopImmediatePropagation();
     }
   }, true);
+  root.addEventListener("dblclick", event => {
+    if (event.timeStamp <= ignoreClickUntil || !canEdit(event.target)) return;
+    event.preventDefault();
+    event.stopPropagation();
+    reset();
+    edit();
+  });
 }

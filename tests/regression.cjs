@@ -406,7 +406,7 @@ test('Mobile double tap enters editing exactly once and ignores a hold, selectio
   const pointer = (type, t, y = 0) => {
     const event = new Event(type, { cancelable: true });
     Object.defineProperty(event, 'timeStamp', { value: t });
-    Object.assign(event, { pointerType: 'touch', pointerId: 1, isPrimary: true, clientX: 0, clientY: y });
+    Object.assign(event, { button: 0, pointerType: 'touch', pointerId: 1, isPrimary: true, clientX: 0, clientY: y });
     root.dispatchEvent(event);
     return event;
   };
@@ -544,4 +544,23 @@ test('Move targets omit the source and can move into a private notebook without 
   await view.moveMemo(memo,'private');
   assert.deepEqual(moved,['private']);
   assert.equal(view.activeNotebookId,'default');
+});
+
+test('Mouse double click in mobile emulation enters editing and does not immediately exit', () => {
+  const { bindMobileDoubleTap } = load('src/components/MobileDoubleTap.ts');
+  const root = new EventTarget();
+  let edits = 0, editing = false;
+  bindMobileDoubleTap(root, () => !editing, () => { edits++; editing = true; });
+  const sendAt = (name, time) => {
+    const event = new Event(name, { cancelable: true });
+    Object.assign(event, { button: 0, pointerType: 'mouse', pointerId: 1, isPrimary: true, clientX: 20, clientY: 40 });
+    Object.defineProperty(event, 'timeStamp', { value: time });
+    root.dispatchEvent(event);
+    return event;
+  };
+  sendAt('pointerdown', 10); sendAt('pointerup', 40); sendAt('click', 41);
+  sendAt('pointerdown', 150); sendAt('pointerup', 180);
+  assert.equal(sendAt('click', 181).defaultPrevented, true);
+  sendAt('dblclick', 182);
+  assert.equal(edits, 1);
 });

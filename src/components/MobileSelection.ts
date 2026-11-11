@@ -151,11 +151,12 @@ export function bindMobileSelection(display: HTMLElement): () => void {
     const overlay = doc.body.createDiv({ cls: "memos-selection-overlay" });
     layer = overlay;
     const marks = overlay.createDiv();
-    const toolbar = overlay.createDiv({ cls: "memos-selection-toolbar", attr: { role: "toolbar", "aria-label": "选中文字" } });
+    const toolbar = overlay.createDiv({ cls: "memos-selection-toolbar", attr: { role: "toolbar" } });
     const button = (label: string, icon: string, action: () => void) => {
-      const el = toolbar.createEl("button", { attr: { type: "button" } });
+      const el = toolbar.createEl("button", { attr: { type: "button", "aria-label": label } });
       setIcon(el.createSpan({ attr: { "aria-hidden": "true" } }), icon);
-      el.createSpan({ text: label });
+      if (icon === "copy") el.addClass("is-copy");
+      else el.createSpan({ text: label });
       el.addEventListener("click", action, options);
       return el;
     };
