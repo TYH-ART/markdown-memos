@@ -90,7 +90,7 @@ export class MemoCard {
         openTextEditingMenu(target, event, target === this.editorTitleInput ? this.editorTextarea : undefined);
         return;
       }
-      if (openReadingCopyMenu(this.display, event)) return;
+      if (openReadingCopyMenu(this.display, event, this.options.isMobileLayout?.() ? undefined : this.memo.content)) return;
       event.stopPropagation();
     });
     owner.registerDomEvent(this.article, "click", (event: MouseEvent) => {

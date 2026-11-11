@@ -1,10 +1,19 @@
 import { pasteMultilineTitle } from "./TitleBodyInput";
 import { Menu, Notice } from "obsidian";
-import { errorMessage } from "../utils";
+import { errorMessage, memoClipboardText, splitMemoContent } from "../utils";
 
 export type TextEditingControl = HTMLInputElement | HTMLTextAreaElement;
 
-export function openReadingCopyMenu(container: HTMLElement, event: MouseEvent): boolean {
+export function openReadingCopyMenu(container: HTMLElement, event: MouseEvent, content?: string): boolean {
+  if (content !== undefined) {
+    event.preventDefault();
+    event.stopPropagation();
+    const menu = new Menu();
+    addCopyItem(menu, splitMemoContent(content).body);
+    addCopyItem(menu, memoClipboardText(content), "复制所有");
+    menu.showAtMouseEvent(event);
+    return true;
+  }
   const selection = container.ownerDocument.getSelection();
   if (!selection || selection.isCollapsed || !container.contains(selection.anchorNode)
       || !container.contains(selection.focusNode)) return false;
@@ -17,8 +26,8 @@ export function openReadingCopyMenu(container: HTMLElement, event: MouseEvent): 
   return true;
 }
 
-function addCopyItem(menu: Menu, text: string): void {
-  menu.addItem((item) => item.setTitle("复制").setIcon("copy").setDisabled(!text.length).onClick(async () => {
+function addCopyItem(menu: Menu, text: string, label = "复制"): void {
+  menu.addItem((item) => item.setTitle(label).setIcon("copy").setDisabled(!text.length).onClick(async () => {
     try {
       await navigator.clipboard.writeText(text);
     } catch (error) {

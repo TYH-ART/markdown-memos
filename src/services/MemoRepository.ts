@@ -15,6 +15,7 @@ export class MemoRepository {
   public constructor(
     private readonly app: App,
     private readonly getSettings: () => ObsidianMemosSettings,
+    private readonly saveSettings: () => Promise<void> = async () => {},
   ) {}
 
   public get folder(): string {
@@ -140,7 +141,12 @@ export class MemoRepository {
     await this.updateFrontmatter(currentFile, (frontmatter) => {
       frontmatter.pinned = frontmatter.pinned !== true;
     }, false);
-    return this.readMemo(currentFile);
+    const memo = await this.readMemo(currentFile);
+    const settings = this.getSettings();
+    const order = (settings.pinnedMemoOrder ?? []).filter(path => path !== currentFile.path);
+    settings.pinnedMemoOrder = memo.pinned ? [currentFile.path, ...order] : order;
+    await this.saveSettings();
+    return memo;
   }
 
   public async setMemoType(file: TFile, type: MemoType): Promise<MemoRecord> {

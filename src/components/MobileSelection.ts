@@ -70,6 +70,7 @@ export function initialWord(text: string, offset: number): [number, number] {
 }
 
 export function bindMobileSelection(display: HTMLElement): () => void {
+  const surface = display.closest<HTMLElement>(".obsidian-memos-card") ?? display;
   const doc = display.ownerDocument;
   const win = doc.defaultView!;
   const bridge = (win as Window & { Capacitor?: MobileBridge }).Capacitor;
@@ -79,9 +80,11 @@ export function bindMobileSelection(display: HTMLElement): () => void {
   let press: { x: number; y: number; id: number } | undefined;
   let layer: HTMLElement | undefined;
   let suppressClick = false;
+  let scrollFrame = 0;
   const cancelPress = () => { win.clearTimeout(timer); press = undefined; };
   const close = () => {
     cancelPress();
+    win.cancelAnimationFrame(scrollFrame);
     session?.abort();
     session = undefined;
     layer?.remove();
@@ -95,14 +98,20 @@ export function bindMobileSelection(display: HTMLElement): () => void {
 
   const begin = (x: number, y: number) => {
     const caret = caretAt(doc, x, y);
-    if (!caret || !readingText(caret.startContainer) || caret.startContainer.nodeType !== 3) return;
-    const range: Range = caret;
-    const node = range.startContainer;
-    const [start, end] = initialWord(node.textContent ?? "", range.startOffset);
-    if (start === end) return;
+    const body = display.querySelector(".obsidian-memos-card__content");
+    if (!body || body.querySelector(".obsidian-memos-card__empty-content")) return;
+    const range = doc.createRange();
+    let blank = true;
+    if (caret && readingText(caret.startContainer) && caret.startContainer.nodeType === 3) {
+      const node = caret.startContainer;
+      const [start, end] = initialWord(node.textContent ?? "", caret.startOffset);
+      range.setStart(node, start);
+      range.setEnd(node, end);
+      blank = !Array.from(range.getClientRects()).some(r => x >= r.left - 3 && x <= r.right + 3 && y >= r.top && y <= r.bottom);
+    }
     close();
-    range.setStart(node, start);
-    range.setEnd(node, end);
+    if (blank) range.selectNodeContents(body);
+    if (!range.toString().trim()) return;
     suppressClick = true;
     display.addClass("has-mobile-selection");
     session = new AbortController();
@@ -132,14 +141,11 @@ export function bindMobileSelection(display: HTMLElement): () => void {
     button("复制", "copy", () => {
       void copyText(doc, selectedText(), bridge).then(close, () => new Notice("复制失败，请重试"));
     });
-    button("全选", "scan", () => {
-      const blocks = Array.from(display.querySelectorAll(textSelector)).filter(el => el.textContent);
-      if (!blocks.length) return;
-      range.setStart(blocks[0], 0);
-      const last = blocks[blocks.length - 1];
-      range.setEnd(last, last.childNodes.length);
+    const selectAll = button("全选", "scan", () => {
+      range.selectNodeContents(body);
       paint();
     });
+    selectAll.hidden = blank;
     const open = button("打开网址", "external-link", async () => {
       const url = selectedWebUrl(selectedText());
       if (!url) return;
@@ -163,10 +169,11 @@ export function bindMobileSelection(display: HTMLElement): () => void {
         deltaY = parseFloat(grip.style.top) - event.clientY - 2;
         toolbar.hidden = true;
       }, options);
-      grip.addEventListener("pointermove", event => {
-        if (!grip.hasPointerCapture(event.pointerId)) return;
+      let pointerX = 0, pointerY = 0;
+      const scroller = display.closest<HTMLElement>(".obsidian-memos-detail-card-host");
+      const update = () => {
         overlay.classList.add("is-hit-testing");
-        const caret = caretAt(doc, event.clientX + deltaX, event.clientY + deltaY);
+        const caret = caretAt(doc, pointerX + deltaX, pointerY + deltaY);
         overlay.classList.remove("is-hit-testing");
         if (!caret || !readingText(caret.startContainer)) return;
         const fixed = range.cloneRange();
@@ -175,8 +182,30 @@ export function bindMobileSelection(display: HTMLElement): () => void {
         if (edge === "start" && order < 0) range.setStart(caret.startContainer, caret.startOffset);
         if (edge === "end" && order > 0) range.setEnd(caret.startContainer, caret.startOffset);
         paint();
+      };
+      grip.addEventListener("pointermove", event => {
+        if (!grip.hasPointerCapture(event.pointerId)) return;
+        pointerX = event.clientX;
+        pointerY = event.clientY;
+        update();
+        win.cancelAnimationFrame(scrollFrame);
+        const tick = () => {
+          if (!scroller) return;
+          const bounds = scroller.getBoundingClientRect();
+          const top = Math.max(0, bounds.top), bottom = Math.min(win.innerHeight, bounds.bottom);
+          const speed = pointerY < top + 40 ? -6 : pointerY > bottom - 40 ? 6 : 0;
+          if (!speed) return;
+          scroller.scrollTop += speed;
+          update();
+          scrollFrame = win.requestAnimationFrame(tick);
+        };
+        scrollFrame = win.requestAnimationFrame(tick);
       }, options);
-      grip.addEventListener("lostpointercapture", () => { toolbar.hidden = false; paint(); }, options);
+      grip.addEventListener("lostpointercapture", () => {
+        win.cancelAnimationFrame(scrollFrame);
+        toolbar.hidden = false;
+        paint();
+      }, options);
       return grip;
     });
     function paint(): void {
@@ -191,42 +220,45 @@ export function bindMobileSelection(display: HTMLElement): () => void {
         rects.push(...Array.from(segment.getClientRects()).filter(r => r.width && r.height));
       }
       if (!rects.length) { close(); return; }
-      for (const rect of rects) {
+      for (const rect of blank ? [] : rects) {
         const mark = marks.createDiv({ cls: "memos-selection-mark" });
         Object.assign(mark.style, { left: rect.left + "px", top: rect.top + "px", width: rect.width + "px", height: rect.height + "px" });
       }
-      const first = rects[0], last = rects[rects.length - 1];
-      Object.assign(grips[0].style, { left: first.left + "px", top: first.bottom + "px" });
-      Object.assign(grips[1].style, { left: last.right + "px", top: last.bottom + "px" });
-      open.hidden = !selectedWebUrl(selectedText());
+      grips.forEach(grip => { grip.hidden = blank; });
+      const visible = rects.filter(rect => rect.bottom > 0 && rect.top < win.innerHeight);
+      const first = visible[0] ?? rects[0], last = visible[visible.length - 1] ?? rects[rects.length - 1];
+      Object.assign(grips[0].style, { left: rects[0].left + "px", top: rects[0].bottom + "px" });
+      Object.assign(grips[1].style, { left: rects[rects.length - 1].right + "px", top: rects[rects.length - 1].bottom + "px" });
+      open.hidden = blank || !selectedWebUrl(selectedText());
       const width = toolbar.offsetWidth, height = toolbar.offsetHeight;
       const left = Math.max(6, Math.min(first.left + first.width / 2 - width / 2, win.innerWidth - width - 6));
-      const top = first.top >= height + 12 ? first.top - height - 8 : Math.min(last.bottom + 22, win.innerHeight - height - 6);
+      const top = blank ? Math.min(y, win.innerHeight - height - 6) : first.top >= height + 12 ? first.top - height - 8 : Math.min(last.bottom + 22, win.innerHeight - height - 6);
       Object.assign(toolbar.style, { left: left + "px", top: Math.max(6, top) + "px" });
     }
     doc.addEventListener("pointerdown", event => { if (!overlay.contains(event.target as Node)) close(); }, { ...options, capture: true });
-    doc.addEventListener("scroll", close, { ...options, capture: true });
+    doc.addEventListener("scroll", () => { if (display.isConnected) paint(); else close(); }, { ...options, capture: true });
     doc.addEventListener("keydown", event => { if (event.key === "Escape") close(); }, options);
     win.addEventListener("resize", close, options);
     paint();
   };
   const listeners = { signal: bound.signal };
-  display.addEventListener("pointerdown", event => {
+  surface.addEventListener("pointerdown", event => {
     cancelPress();
     suppressClick = false;
-    if (!event.isPrimary || event.button !== 0 || !readingText(event.target as Node)) return;
+    if (!event.isPrimary || event.button !== 0 ||
+      (event.target as Element).closest("button, input, textarea, a, .obsidian-memos-attachments")) return;
     press = { id: event.pointerId, x: event.clientX, y: event.clientY };
     timer = win.setTimeout(() => { if (press) begin(press.x, press.y); }, 450);
   }, listeners);
-  display.addEventListener("pointermove", event => {
+  surface.addEventListener("pointermove", event => {
     if (press?.id === event.pointerId && Math.hypot(event.clientX - press.x, event.clientY - press.y) > 8) cancelPress();
   }, listeners);
-  display.addEventListener("pointerup", cancelPress, listeners);
-  display.addEventListener("pointercancel", cancelPress, listeners);
-  display.addEventListener("contextmenu", event => {
-    if (readingText(event.target as Node)) { event.preventDefault(); event.stopPropagation(); }
+  surface.addEventListener("pointerup", cancelPress, listeners);
+  surface.addEventListener("pointercancel", cancelPress, listeners);
+  surface.addEventListener("contextmenu", event => {
+    if (!(event.target as Element).closest(".obsidian-memos-attachments")) { event.preventDefault(); event.stopPropagation(); }
   }, listeners);
-  display.addEventListener("click", event => {
+  surface.addEventListener("click", event => {
     if (suppressClick) { event.preventDefault(); event.stopImmediatePropagation(); suppressClick = false; }
   }, { ...listeners, capture: true });
   display.addClass("uses-mobile-selection");

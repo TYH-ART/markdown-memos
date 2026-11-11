@@ -1,5 +1,33 @@
+import { Notice } from "obsidian";
+
+export function boundedTitle(value: string): [string, string] {
+  const encoder = new TextEncoder();
+  let bytes = 0, length = 0;
+  for (const character of value) {
+    bytes += encoder.encode(character).length;
+    if (bytes > 252) break;
+    length += character.length;
+  }
+  return [value.slice(0, length), value.slice(length)];
+}
+
 /** Share the same single-line title behavior with hardware and mobile keyboards. */
 export function bindTitleToBody(title: HTMLInputElement | HTMLTextAreaElement, body: HTMLTextAreaElement): void {
+  const enforceLimit = (): void => {
+    const [kept, overflow] = boundedTitle(title.value);
+    if (!overflow) return;
+    title.value = kept;
+    body.value = overflow + (body.value ? "\n" + body.value : "");
+    body.dispatchEvent(new Event("input", { bubbles: true }));
+    new Notice("标题超出长度的部分已转入正文");
+  };
+  title.addEventListener("input", event => {
+    if (!(event as InputEvent).isComposing) enforceLimit();
+  }, true);
+  title.addEventListener("compositionend", () => {
+    enforceLimit();
+    title.dispatchEvent(new Event("input", { bubbles: true }));
+  });
   const moveToBody = (): void => {
     const start = title.selectionStart ?? title.value.length;
     const end = title.selectionEnd ?? start;

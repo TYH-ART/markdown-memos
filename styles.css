@@ -2782,3 +2782,7 @@ body.is-mobile .obsidian-memos-view-container.is-mobile .view-header,
 .memos-selection-grip.is-start::after { left: auto; right: 0; transform: none; border-radius: 8px 0 8px 8px; }
 .memos-selection-grip.is-end::after { left: 0; transform: none; border-radius: 0 8px 8px 8px; }
 .memos-selection-overlay.is-hit-testing * { pointer-events: none; }
+
+.memos-selection-grip { width: 44px; height: 44px; }
+.memos-selection-grip[hidden] { display: none; }
+.memos-selection-grip::after { width: 18px; height: 20px; }

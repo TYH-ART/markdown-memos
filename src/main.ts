@@ -31,7 +31,7 @@ export default class ObsidianMemosPlugin extends Plugin {
 
   public override async onload(): Promise<void> {
     await this.loadSettings();
-    this.repository = new MemoRepository(this.app, () => this.settings);
+    this.repository = new MemoRepository(this.app, () => this.settings, () => this.saveSettings());
     this.attachmentService = new AttachmentService(this.app, this.repository, () => this.settings);
 
     this.registerView(MEMOS_VIEW_TYPE, (leaf) => new MemosView(leaf, this));

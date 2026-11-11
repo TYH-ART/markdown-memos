@@ -25,7 +25,7 @@ function send(control, type, properties) {
   control.dispatchEvent(event);
   return event;
 }
-const { bindTitleToBody } = load('src/components/TitleBodyInput.ts');
+const { bindTitleToBody } = load('src/components/TitleBodyInput.ts', { obsidian: { Notice: class {} } });
 
 test('Manual ordering preserves filtered-out memo positions', () => {
   const { mergeVisibleOrder } = load('src/components/MemoReorder.ts');
@@ -473,4 +473,44 @@ test('Mobile text selection picks the touched URL or Han character and only open
       'https://user:pass@example.org', 'https://example.org\nother']) {
     assert.equal(selectedWebUrl(invalid), undefined);
   }
+});
+
+test('New pins precede saved ranks, unpin removes their rank, repin returns to the front', async () => {
+  const { MemoRepository } = load('src/services/MemoRepository.ts', { obsidian: {} });
+  const settings = { pinnedMemoOrder: ['old'] };
+  const file = { path: 'new' };
+  let pinned = false, saves = 0;
+  const repo = new MemoRepository({}, () => settings, async () => { saves++; });
+  repo.requireFile = () => file;
+  repo.updateFrontmatter = async (f, change) => { const meta = { pinned }; change(meta); pinned = meta.pinned; };
+  repo.readMemo = async () => ({ pinned });
+  await repo.togglePinned(file);
+  assert.deepEqual(settings.pinnedMemoOrder, ['new', 'old']);
+  await repo.togglePinned(file);
+  assert.deepEqual(settings.pinnedMemoOrder, ['old']);
+  await repo.togglePinned(file);
+  assert.deepEqual(settings.pinnedMemoOrder, ['new', 'old']);
+  assert.equal(saves, 3);
+});
+test('Title overflow preserves Unicode and moves into the body', () => {
+  const title = new Control('中'.repeat(85) + '😀'), body = new Control('正文');
+  bindTitleToBody(title, body);
+  send(title, 'input', {});
+  assert.equal(Buffer.byteLength(title.value), 252);
+  assert.equal(body.value, '中😀\n正文');
+});
+test('Desktop whole-card menu distinguishes body-only from title and body', async () => {
+  const entries = [], copied = [];
+  class Menu {
+    addItem(fn) {
+      const item = { setTitle(t) { this.title=t; return this; }, setIcon() { return this; }, setDisabled() { return this; }, onClick(fn) { this.click=fn; } };
+      fn(item); entries.push(item);
+    }
+    showAtMouseEvent() {}
+  }
+  const { openReadingCopyMenu } = load('src/components/TextEditingMenu.ts', { obsidian: { Menu }, navigator: { clipboard: { writeText: async t => copied.push(t) } } });
+  openReadingCopyMenu({}, new Event('contextmenu', { cancelable: true }), '标题\n\n正文');
+  assert.deepEqual(entries.map(e => e.title), ['复制', '复制所有']);
+  for(const entry of entries) await entry.click();
+  assert.deepEqual(copied, ['正文', '标题\n正文']);
 });
