@@ -122,15 +122,17 @@ export class MemoRepository {
     const memos = await this.getMemos();
     for (const memo of memos) {
       if (memo.notebookId !== fromNotebookId) continue;
-      await this.updateFrontmatter(memo.file, (frontmatter) => {
-        frontmatter.notebookId = toNotebookId;
-      });
+      await this.moveMemoToNotebook(memo.file, toNotebookId);
     }
   }
 
   public async moveMemoToNotebook(file: TFile, notebookId: string): Promise<MemoRecord> {
     const currentFile = this.requireFile(file);
+    const memos = await this.getMemos();
+    if (memos.find(memo => memo.file.path === currentFile.path)?.notebookId === notebookId) return this.readMemo(currentFile);
+    const moveOrder = Math.max(Date.now(), ...memos.map(memo => Number(memo.frontmatter.notebookMoveOrder) || 0)) + 1;
     await this.updateFrontmatter(currentFile, (frontmatter) => {
+      frontmatter.notebookMoveOrder = moveOrder;
       frontmatter.notebookId = notebookId;
     });
     return this.readMemo(currentFile);

@@ -198,14 +198,17 @@ var MemoRepository = class {
     const memos = await this.getMemos();
     for (const memo of memos) {
       if (memo.notebookId !== fromNotebookId) continue;
-      await this.updateFrontmatter(memo.file, (frontmatter) => {
-        frontmatter.notebookId = toNotebookId;
-      });
+      await this.moveMemoToNotebook(memo.file, toNotebookId);
     }
   }
   async moveMemoToNotebook(file, notebookId) {
+    var _a;
     const currentFile = this.requireFile(file);
+    const memos = await this.getMemos();
+    if (((_a = memos.find((memo) => memo.file.path === currentFile.path)) == null ? void 0 : _a.notebookId) === notebookId) return this.readMemo(currentFile);
+    const moveOrder = Math.max(Date.now(), ...memos.map((memo) => Number(memo.frontmatter.notebookMoveOrder) || 0)) + 1;
     await this.updateFrontmatter(currentFile, (frontmatter) => {
+      frontmatter.notebookMoveOrder = moveOrder;
       frontmatter.notebookId = notebookId;
     });
     return this.readMemo(currentFile);
@@ -3788,7 +3791,7 @@ var MemosView = class extends import_obsidian15.ItemView {
     const normal = new Map(((_b = this.plugin.settings.sidebarMemoOrder) != null ? _b : []).map((path, index) => [path, index]));
     return [...memos].sort((a, b) => {
       var _a2, _b2, _c, _d;
-      return Number(b.pinned) - Number(a.pinned) || (a.pinned && b.pinned ? ((_a2 = ranks.get(a.file.path)) != null ? _a2 : Infinity) - ((_b2 = ranks.get(b.file.path)) != null ? _b2 : Infinity) : ((_c = normal.get(a.file.path)) != null ? _c : Infinity) - ((_d = normal.get(b.file.path)) != null ? _d : Infinity));
+      return Number(b.pinned) - Number(a.pinned) || (a.pinned && b.pinned ? ((_a2 = ranks.get(a.file.path)) != null ? _a2 : Infinity) - ((_b2 = ranks.get(b.file.path)) != null ? _b2 : Infinity) : (Number(a.frontmatter.notebookMoveOrder) || Infinity) - (Number(b.frontmatter.notebookMoveOrder) || Infinity) || ((_c = normal.get(a.file.path)) != null ? _c : Infinity) - ((_d = normal.get(b.file.path)) != null ? _d : Infinity));
     });
   }
   bindSidebarRow(row, memo) {

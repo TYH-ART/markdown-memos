@@ -613,3 +613,15 @@ test('Mobile upload routes album, camera and files to the intended system picker
     assert.ok(input.removed);
   }
 });
+
+test('Sidebar uses arrival order across clients despite stale manual ranks and input order', () => {
+  const { MemosView } = load('src/views/MemosView.ts', { obsidian: {
+    ItemView: class {}, Modal: class {}, FuzzySuggestModal: class {}, PluginSettingTab: class {},
+  } });
+  const memo = (path, order, pinned = false) => ({ file: { path }, pinned, frontmatter: { notebookMoveOrder: order } });
+  const view = { plugin: { settings: { sidebarMemoOrder: ['b', 'a', 'old'], pinnedMemoOrder: ['pin'] } } };
+  const items = [memo('b', 200), memo('old'), memo('a', 100), memo('pin', undefined, true)];
+  for (const input of [items, [...items].reverse()]) {
+    assert.deepEqual(MemosView.prototype.sidebarOrder.call(view, input).map(m => m.file.path), ['pin', 'a', 'b', 'old']);
+  }
+});

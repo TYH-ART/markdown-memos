@@ -789,7 +789,7 @@ export class MemosView extends ItemView {
     const ranks = new Map((this.plugin.settings.pinnedMemoOrder ?? []).map((path, index) => [path, index]));
     const normal = new Map((this.plugin.settings.sidebarMemoOrder ?? []).map((path, index) => [path, index]));
     return [...memos].sort((a, b) => Number(b.pinned) - Number(a.pinned) ||
-      (a.pinned && b.pinned ? (ranks.get(a.file.path) ?? Infinity) - (ranks.get(b.file.path) ?? Infinity) : (normal.get(a.file.path) ?? Infinity) - (normal.get(b.file.path) ?? Infinity)));
+      (a.pinned && b.pinned ? (ranks.get(a.file.path) ?? Infinity) - (ranks.get(b.file.path) ?? Infinity) : (Number(a.frontmatter.notebookMoveOrder) || Infinity) - (Number(b.frontmatter.notebookMoveOrder) || Infinity) || (normal.get(a.file.path) ?? Infinity) - (normal.get(b.file.path) ?? Infinity)));
   }
 
   private bindSidebarRow(row: HTMLElement, memo: MemoRecord): void {
