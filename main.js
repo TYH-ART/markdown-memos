@@ -1352,6 +1352,22 @@ function caretAt(doc, x, y) {
   caret.collapse(true);
   return caret;
 }
+function nearestTextPoint(rects, x, y) {
+  let best;
+  let distance = Infinity;
+  for (const rect of rects) {
+    if (!rect.width || !rect.height) continue;
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    if (dx > 10 || dy > Math.max(14, rect.height * 0.7)) continue;
+    const score = dx * dx + dy * dy;
+    if (score < distance) {
+      best = rect;
+      distance = score;
+    }
+  }
+  return best ? { x: Math.max(best.left + 1, Math.min(x, best.right - 1)), y: best.top + best.height / 2 } : void 0;
+}
 function initialWord(text, offset) {
   const pos = Math.min(offset, Math.max(0, text.length - 1));
   const tokens = /https?:\/\/[^\s<>"，。；！？]+|[\p{Script=Han}]|[\p{L}\p{N}_]+|./gu;
@@ -1392,9 +1408,21 @@ function bindMobileSelection(display) {
     const el = (node == null ? void 0 : node.nodeType) === 1 ? node : node == null ? void 0 : node.parentElement;
     return Boolean(el && display.contains(el) && el.closest(textSelector));
   };
+  const nearbyCaret = (x, y) => {
+    const walker = doc.createTreeWalker(display, NodeFilter.SHOW_TEXT);
+    const probe = doc.createRange();
+    const rects = [];
+    while (walker.nextNode()) {
+      if (!readingText(walker.currentNode)) continue;
+      probe.selectNodeContents(walker.currentNode);
+      rects.push(...Array.from(probe.getClientRects()));
+    }
+    const point = nearestTextPoint(rects, x, y);
+    return point ? caretAt(doc, point.x, point.y) : void 0;
+  };
   const begin = (x, y) => {
     var _a2;
-    const caret = caretAt(doc, x, y);
+    const caret = nearbyCaret(x, y);
     const body = display.querySelector(".obsidian-memos-card__content");
     if (!body || body.querySelector(".obsidian-memos-card__empty-content")) return;
     const range = doc.createRange();
@@ -1404,7 +1432,7 @@ function bindMobileSelection(display) {
       const [start, end] = initialWord((_a2 = node.textContent) != null ? _a2 : "", caret.startOffset);
       range.setStart(node, start);
       range.setEnd(node, end);
-      blank = !Array.from(range.getClientRects()).some((r) => x >= r.left - 3 && x <= r.right + 3 && y >= r.top && y <= r.bottom);
+      blank = false;
     }
     close();
     if (blank) range.selectNodeContents(body);
@@ -1457,12 +1485,14 @@ function bindMobileSelection(display) {
       }
       win.open(url, "_blank", "noopener,noreferrer");
     });
-    const grips = ["start", "end"].map((edge) => {
+    const grips = ["start", "end"].map((initialEdge) => {
+      let edge = initialEdge;
       const grip = overlay.createDiv({ cls: "memos-selection-grip is-" + edge });
       let deltaX = 0, deltaY = 0;
       grip.addEventListener("pointerdown", (event) => {
         if (!event.isPrimary) return;
         event.preventDefault();
+        edge = grip.hasClass("is-start") ? "start" : "end";
         grip.setPointerCapture(event.pointerId);
         deltaX = parseFloat(grip.style.left) - event.clientX;
         deltaY = parseFloat(grip.style.top) - event.clientY - 2;
@@ -1472,14 +1502,24 @@ function bindMobileSelection(display) {
       const scroller = display.closest(".obsidian-memos-detail-card-host");
       const update = () => {
         overlay.classList.add("is-hit-testing");
-        const caret2 = caretAt(doc, pointerX + deltaX, pointerY + deltaY);
+        const caret2 = nearbyCaret(pointerX + deltaX, pointerY + deltaY);
         overlay.classList.remove("is-hit-testing");
         if (!caret2 || !readingText(caret2.startContainer)) return;
         const fixed = range.cloneRange();
         fixed.collapse(edge === "end");
         const order = caret2.compareBoundaryPoints(Range.START_TO_START, fixed);
-        if (edge === "start" && order < 0) range.setStart(caret2.startContainer, caret2.startOffset);
-        if (edge === "end" && order > 0) range.setEnd(caret2.startContainer, caret2.startOffset);
+        if (order === 0) return;
+        range.setStart(order < 0 ? caret2.startContainer : fixed.startContainer, order < 0 ? caret2.startOffset : fixed.startOffset);
+        range.setEnd(order < 0 ? fixed.startContainer : caret2.startContainer, order < 0 ? fixed.startOffset : caret2.startOffset);
+        const nextEdge = order < 0 ? "start" : "end";
+        if (edge !== nextEdge) {
+          const other = grips.find((item) => item !== grip);
+          other.classList.toggle("is-start", nextEdge === "end");
+          other.classList.toggle("is-end", nextEdge === "start");
+          edge = nextEdge;
+          grip.classList.toggle("is-start", edge === "start");
+          grip.classList.toggle("is-end", edge === "end");
+        }
         paint();
       };
       grip.addEventListener("pointermove", (event) => {
@@ -1532,11 +1572,11 @@ function bindMobileSelection(display) {
       });
       const visible = rects.filter((rect) => rect.bottom > 0 && rect.top < win.innerHeight);
       const first = (_a3 = visible[0]) != null ? _a3 : rects[0], last = (_b = visible[visible.length - 1]) != null ? _b : rects[rects.length - 1];
-      Object.assign(grips[0].style, { left: rects[0].left + "px", top: rects[0].bottom + "px" });
-      Object.assign(grips[1].style, { left: rects[rects.length - 1].right + "px", top: rects[rects.length - 1].bottom + "px" });
+      Object.assign(grips.find((grip) => grip.hasClass("is-start")).style, { left: rects[0].left + "px", top: rects[0].bottom + "px" });
+      Object.assign(grips.find((grip) => grip.hasClass("is-end")).style, { left: rects[rects.length - 1].right + "px", top: rects[rects.length - 1].bottom + "px" });
       open.hidden = blank || !selectedWebUrl(selectedText());
       const width = toolbar.offsetWidth, height = toolbar.offsetHeight;
-      const left = Math.max(6, Math.min(first.left + first.width / 2 - width / 2, win.innerWidth - width - 6));
+      const left = Math.max(6, Math.min((blank ? x : first.left + first.width / 2) - width / 2, win.innerWidth - width - 6));
       const top = blank ? Math.min(y, win.innerHeight - height - 6) : first.top >= height + 12 ? first.top - height - 8 : Math.min(last.bottom + 22, win.innerHeight - height - 6);
       Object.assign(toolbar.style, { left: left + "px", top: Math.max(6, top) + "px" });
     }
@@ -1544,7 +1584,7 @@ function bindMobileSelection(display) {
       if (!overlay.contains(event.target)) close();
     }, { ...options, capture: true });
     doc.addEventListener("scroll", () => {
-      if (display.isConnected) paint();
+      if (display.isConnected && !blank) paint();
       else close();
     }, { ...options, capture: true });
     doc.addEventListener("keydown", (event) => {
@@ -1937,6 +1977,12 @@ var MemoCard = class {
     time.setAttr("title", `\u521B\u5EFA\uFF1A${memo.created.toLocaleString()}
 \u4FEE\u6539\uFF1A${memo.modified.toLocaleString()}`);
     const actions = header.createDiv({ cls: "obsidian-memos-card__toolbar" });
+    const moveButton = createIconButton(actions, "folder-input", "\u79FB\u52A8\u5230\u5176\u4ED6\u5907\u5FD8\u5F55");
+    moveButton.toggleClass("is-hidden", options.trashMode === true || !options.onMove);
+    owner.registerDomEvent(moveButton, "click", (event) => {
+      event.stopPropagation();
+      void this.openMoveMenu(event);
+    });
     const pinButton = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button" } });
     (0, import_obsidian11.setIcon)(pinButton, "pin");
     pinButton.toggleClass("is-pinned", memo.pinned);
@@ -2134,6 +2180,16 @@ var MemoCard = class {
     const initialTarget = tagToInsert || editTitle ? titleInput : textarea;
     initialTarget.focus({ preventScroll: true });
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
+  }
+  async openMoveMenu(event) {
+    var _a, _b, _c, _d, _e, _f;
+    if (this.article.hasClass("is-editing")) {
+      const content = joinMemoContent((_b = (_a = this.editorTitleInput) == null ? void 0 : _a.value) != null ? _b : "", (_d = (_c = this.editorTextarea) == null ? void 0 : _c.value) != null ? _d : "");
+      this.editDraft = content;
+      await this.flushAutoSave();
+      if (this.lastPersistedContent !== content) return;
+    }
+    (_f = (_e = this.options).onMove) == null ? void 0 : _f.call(_e, event);
   }
   enterReadingMode() {
     this.article.addClass("is-reading-mode");
@@ -3541,6 +3597,7 @@ var MemosView = class extends import_obsidian15.ItemView {
       }
       const card = new MemoCard(this.app, this, item, this.plugin.repository, memo, {
         onChanged: () => this.refresh(memo.file.path),
+        onMove: (event) => this.openMoveMenu(memo, event),
         attachmentService: this.plugin.attachmentService,
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : void 0;
@@ -3751,6 +3808,32 @@ var MemosView = class extends import_obsidian15.ItemView {
     menu.addItem((item) => item.setTitle(memo.pinned ? "\u53D6\u6D88\u7F6E\u9876" : "\u7F6E\u9876").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
     menu.addItem((item) => item.setTitle("\u5220\u9664").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     menu.showAtMouseEvent(event);
+  }
+  openMoveMenu(memo, event) {
+    const targets = this.plugin.settings.memoNotebooks.filter((book) => book.id !== memo.notebookId);
+    if (!targets.length) {
+      new import_obsidian15.Notice("\u8BF7\u5148\u521B\u5EFA\u53E6\u4E00\u4E2A\u5907\u5FD8\u5F55");
+      return;
+    }
+    const menu = new import_obsidian15.Menu();
+    for (const book of targets) {
+      menu.addItem((item) => item.setTitle(book.name).setIcon(book.private ? "lock" : "notebook-tabs").onClick(() => void this.moveMemo(memo, book.id)));
+    }
+    menu.showAtMouseEvent(event);
+  }
+  async moveMemo(memo, notebookId) {
+    if (!this.plugin.settings.memoNotebooks.some((book) => book.id === notebookId)) {
+      new import_obsidian15.Notice("\u76EE\u6807\u5907\u5FD8\u5F55\u5DF2\u4E0D\u5B58\u5728");
+      return;
+    }
+    try {
+      await this.plugin.repository.moveMemoToNotebook(memo.file, notebookId);
+      this.editingPath = void 0;
+      await this.refresh(memo.file.path);
+      new import_obsidian15.Notice("\u6D88\u606F\u5DF2\u79FB\u52A8");
+    } catch (e) {
+      new import_obsidian15.Notice("\u79FB\u52A8\u5931\u8D25\uFF0C\u8BF7\u91CD\u8BD5");
+    }
   }
   async togglePinnedFromList(memo) {
     try {

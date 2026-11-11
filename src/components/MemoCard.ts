@@ -12,6 +12,7 @@ import { resizeEditor } from "./EditorSizing";
 
 export interface MemoCardOptions {
   onChanged: () => Promise<void>;
+  onMove?: (event: MouseEvent) => void;
   attachmentService: AttachmentService;
   onEditingChange?: (editing: boolean) => void;
   getPopularTags?: () => string[];
@@ -64,6 +65,12 @@ export class MemoCard {
     });
     time.setAttr("title", `创建：${memo.created.toLocaleString()}\n修改：${memo.modified.toLocaleString()}`);
     const actions = header.createDiv({ cls: "obsidian-memos-card__toolbar" });
+    const moveButton = createIconButton(actions, "folder-input", "移动到其他备忘录");
+    moveButton.toggleClass("is-hidden", options.trashMode === true || !options.onMove);
+    owner.registerDomEvent(moveButton, "click", (event: MouseEvent) => {
+      event.stopPropagation();
+      void this.openMoveMenu(event);
+    });
     const pinButton = actions.createEl("button", { cls: "clickable-icon", attr: { type: "button" } });
     setIcon(pinButton, "pin");
     pinButton.toggleClass("is-pinned", memo.pinned);
@@ -264,6 +271,16 @@ export class MemoCard {
     const initialTarget = tagToInsert || editTitle ? titleInput : textarea;
     initialTarget.focus({ preventScroll: true });
     initialTarget.setSelectionRange(initialTarget.value.length, initialTarget.value.length);
+  }
+
+  private async openMoveMenu(event: MouseEvent): Promise<void> {
+    if (this.article.hasClass("is-editing")) {
+      const content = joinMemoContent(this.editorTitleInput?.value ?? "", this.editorTextarea?.value ?? "");
+      this.editDraft = content;
+      await this.flushAutoSave();
+      if (this.lastPersistedContent !== content) return;
+    }
+    this.options.onMove?.(event);
   }
 
   private enterReadingMode(): void {

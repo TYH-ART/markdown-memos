@@ -628,6 +628,7 @@ export class MemosView extends ItemView {
       }
       const card = new MemoCard(this.app, this, item, this.plugin.repository, memo, {
         onChanged: () => this.refresh(memo.file.path),
+        onMove: event => this.openMoveMenu(memo, event),
         attachmentService: this.plugin.attachmentService,
         onEditingChange: (editing) => {
           this.editingPath = editing ? memo.file.path : undefined;
@@ -843,6 +844,32 @@ export class MemosView extends ItemView {
     menu.addItem((item) => item.setTitle(memo.pinned ? "取消置顶" : "置顶").setIcon("pin").onClick(() => void this.togglePinnedFromList(memo)));
     menu.addItem((item) => item.setTitle("删除").setIcon("trash-2").onClick(() => void this.deleteMemoFromList(memo)));
     menu.showAtMouseEvent(event);
+  }
+
+  private openMoveMenu(memo: MemoRecord, event: MouseEvent): void {
+    const targets = this.plugin.settings.memoNotebooks.filter(book => book.id !== memo.notebookId);
+    if (!targets.length) { new Notice("请先创建另一个备忘录"); return; }
+    const menu = new Menu();
+    for (const book of targets) {
+      menu.addItem(item => item.setTitle(book.name).setIcon(book.private ? "lock" : "notebook-tabs")
+        .onClick(() => void this.moveMemo(memo, book.id)));
+    }
+    menu.showAtMouseEvent(event);
+  }
+
+  private async moveMemo(memo: MemoRecord, notebookId: string): Promise<void> {
+    if (!this.plugin.settings.memoNotebooks.some(book => book.id === notebookId)) {
+      new Notice("目标备忘录已不存在");
+      return;
+    }
+    try {
+      await this.plugin.repository.moveMemoToNotebook(memo.file, notebookId);
+      this.editingPath = undefined;
+      await this.refresh(memo.file.path);
+      new Notice("消息已移动");
+    } catch {
+      new Notice("移动失败，请重试");
+    }
   }
 
   private async togglePinnedFromList(memo: MemoRecord): Promise<void> {

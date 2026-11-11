@@ -58,6 +58,21 @@ function caretAt(doc: Document, x: number, y: number): Range | undefined {
   return caret;
 }
 
+/** Find the closest rendered line, including the leading above/below its glyphs. */
+export function nearestTextPoint(rects: DOMRect[], x: number, y: number): { x: number; y: number } | undefined {
+  let best: DOMRect | undefined;
+  let distance = Infinity;
+  for (const rect of rects) {
+    if (!rect.width || !rect.height) continue;
+    const dx = Math.max(rect.left - x, 0, x - rect.right);
+    const dy = Math.max(rect.top - y, 0, y - rect.bottom);
+    if (dx > 10 || dy > Math.max(14, rect.height * 0.7)) continue;
+    const score = dx * dx + dy * dy;
+    if (score < distance) { best = rect; distance = score; }
+  }
+  return best ? { x: Math.max(best.left + 1, Math.min(x, best.right - 1)), y: best.top + best.height / 2 } : undefined;
+}
+
 export function initialWord(text: string, offset: number): [number, number] {
   const pos = Math.min(offset, Math.max(0, text.length - 1));
   const tokens = /https?:\/\/[^\s<>"，。；！？]+|[\p{Script=Han}]|[\p{L}\p{N}_]+|./gu;
@@ -96,8 +111,20 @@ export function bindMobileSelection(display: HTMLElement): () => void {
     return Boolean(el && display.contains(el) && el.closest(textSelector));
   };
 
+  const nearbyCaret = (x: number, y: number) => {
+    const walker = doc.createTreeWalker(display, NodeFilter.SHOW_TEXT);
+    const probe = doc.createRange();
+    const rects: DOMRect[] = [];
+    while (walker.nextNode()) {
+      if (!readingText(walker.currentNode)) continue;
+      probe.selectNodeContents(walker.currentNode);
+      rects.push(...Array.from(probe.getClientRects()));
+    }
+    const point = nearestTextPoint(rects, x, y);
+    return point ? caretAt(doc, point.x, point.y) : undefined;
+  };
   const begin = (x: number, y: number) => {
-    const caret = caretAt(doc, x, y);
+    const caret = nearbyCaret(x, y);
     const body = display.querySelector(".obsidian-memos-card__content");
     if (!body || body.querySelector(".obsidian-memos-card__empty-content")) return;
     const range = doc.createRange();
@@ -107,7 +134,7 @@ export function bindMobileSelection(display: HTMLElement): () => void {
       const [start, end] = initialWord(node.textContent ?? "", caret.startOffset);
       range.setStart(node, start);
       range.setEnd(node, end);
-      blank = !Array.from(range.getClientRects()).some(r => x >= r.left - 3 && x <= r.right + 3 && y >= r.top && y <= r.bottom);
+      blank = false;
     }
     close();
     if (blank) range.selectNodeContents(body);
@@ -158,12 +185,14 @@ export function bindMobileSelection(display: HTMLElement): () => void {
       } catch { /* Use Obsidian’s external link handler when the native bridge declines. */ }
       win.open(url, "_blank", "noopener,noreferrer");
     });
-    const grips = (["start", "end"] as const).map(edge => {
+    const grips = (["start", "end"] as const).map(initialEdge => {
+      let edge = initialEdge;
       const grip = overlay.createDiv({ cls: "memos-selection-grip is-" + edge });
       let deltaX = 0, deltaY = 0;
       grip.addEventListener("pointerdown", event => {
         if (!event.isPrimary) return;
         event.preventDefault();
+        edge = grip.hasClass("is-start") ? "start" : "end";
         grip.setPointerCapture(event.pointerId);
         deltaX = parseFloat(grip.style.left) - event.clientX;
         deltaY = parseFloat(grip.style.top) - event.clientY - 2;
@@ -173,14 +202,24 @@ export function bindMobileSelection(display: HTMLElement): () => void {
       const scroller = display.closest<HTMLElement>(".obsidian-memos-detail-card-host");
       const update = () => {
         overlay.classList.add("is-hit-testing");
-        const caret = caretAt(doc, pointerX + deltaX, pointerY + deltaY);
+        const caret = nearbyCaret(pointerX + deltaX, pointerY + deltaY);
         overlay.classList.remove("is-hit-testing");
         if (!caret || !readingText(caret.startContainer)) return;
         const fixed = range.cloneRange();
         fixed.collapse(edge === "end");
         const order = caret.compareBoundaryPoints(Range.START_TO_START, fixed);
-        if (edge === "start" && order < 0) range.setStart(caret.startContainer, caret.startOffset);
-        if (edge === "end" && order > 0) range.setEnd(caret.startContainer, caret.startOffset);
+        if (order === 0) return;
+        range.setStart(order < 0 ? caret.startContainer : fixed.startContainer, order < 0 ? caret.startOffset : fixed.startOffset);
+        range.setEnd(order < 0 ? fixed.startContainer : caret.startContainer, order < 0 ? fixed.startOffset : caret.startOffset);
+        const nextEdge = order < 0 ? "start" : "end";
+        if (edge !== nextEdge) {
+          const other = grips.find(item => item !== grip)!;
+          other.classList.toggle("is-start", nextEdge === "end");
+          other.classList.toggle("is-end", nextEdge === "start");
+          edge = nextEdge;
+          grip.classList.toggle("is-start", edge === "start");
+          grip.classList.toggle("is-end", edge === "end");
+        }
         paint();
       };
       grip.addEventListener("pointermove", event => {
@@ -227,16 +266,16 @@ export function bindMobileSelection(display: HTMLElement): () => void {
       grips.forEach(grip => { grip.hidden = blank; });
       const visible = rects.filter(rect => rect.bottom > 0 && rect.top < win.innerHeight);
       const first = visible[0] ?? rects[0], last = visible[visible.length - 1] ?? rects[rects.length - 1];
-      Object.assign(grips[0].style, { left: rects[0].left + "px", top: rects[0].bottom + "px" });
-      Object.assign(grips[1].style, { left: rects[rects.length - 1].right + "px", top: rects[rects.length - 1].bottom + "px" });
+      Object.assign(grips.find(grip => grip.hasClass("is-start"))!.style, { left: rects[0].left + "px", top: rects[0].bottom + "px" });
+      Object.assign(grips.find(grip => grip.hasClass("is-end"))!.style, { left: rects[rects.length - 1].right + "px", top: rects[rects.length - 1].bottom + "px" });
       open.hidden = blank || !selectedWebUrl(selectedText());
       const width = toolbar.offsetWidth, height = toolbar.offsetHeight;
-      const left = Math.max(6, Math.min(first.left + first.width / 2 - width / 2, win.innerWidth - width - 6));
+      const left = Math.max(6, Math.min((blank ? x : first.left + first.width / 2) - width / 2, win.innerWidth - width - 6));
       const top = blank ? Math.min(y, win.innerHeight - height - 6) : first.top >= height + 12 ? first.top - height - 8 : Math.min(last.bottom + 22, win.innerHeight - height - 6);
       Object.assign(toolbar.style, { left: left + "px", top: Math.max(6, top) + "px" });
     }
     doc.addEventListener("pointerdown", event => { if (!overlay.contains(event.target as Node)) close(); }, { ...options, capture: true });
-    doc.addEventListener("scroll", () => { if (display.isConnected) paint(); else close(); }, { ...options, capture: true });
+    doc.addEventListener("scroll", () => { if (display.isConnected && !blank) paint(); else close(); }, { ...options, capture: true });
     doc.addEventListener("keydown", event => { if (event.key === "Escape") close(); }, options);
     win.addEventListener("resize", close, options);
     paint();

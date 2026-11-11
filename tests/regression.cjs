@@ -514,3 +514,34 @@ test('Desktop whole-card menu distinguishes body-only from title and body', asyn
   for(const entry of entries) await entry.click();
   assert.deepEqual(copied, ['正文', '标题\n正文']);
 });
+
+test('Mobile line spacing selects nearby text, while distant card padding remains blank', () => {
+  const { nearestTextPoint } = load('src/components/MobileSelection.ts', { obsidian: {} });
+  const line = (top, bottom) => ({ left: 20, right: 150, top, bottom, height: bottom-top, width:130 });
+  const rects = [line(50,70),line(90,110)];
+  assert.deepEqual(nearestTextPoint(rects, 60, 80), {x:60,y:60});
+  assert.deepEqual(nearestTextPoint(rects, 60, 86), {x:60,y:100});
+  assert.equal(nearestTextPoint(rects, 260, 80), undefined);
+  assert.equal(nearestTextPoint(rects, 60, 180), undefined);
+});
+test('Move targets omit the source and can move into a private notebook without opening it', async () => {
+  const entries = [];
+  const environment = { obsidian: {
+    ItemView: class {}, Modal: class {}, FuzzySuggestModal: class {}, PluginSettingTab: class {}, Notice: class {},
+    Menu: class {
+      addItem(fn) { const entry={setTitle(v){this.title=v;return this;},setIcon(){return this;},onClick(fn){this.click=fn;}};fn(entry);entries.push(entry); }
+      showAtMouseEvent(){}
+    }
+  } };
+  const { MemosView } = load('src/views/MemosView.ts', environment);
+  const moved = [];
+  const view = { activeNotebookId:'default', plugin:{settings:{memoNotebooks:[{id:'default',name:'source'},{id:'private',name:'private',private:true}]},
+    repository:{moveMemoToNotebook:async (file,id)=>moved.push(id)}},
+    refresh:async()=>{}, moveMemo: MemosView.prototype.moveMemo };
+  const memo={notebookId:'default',file:{path:'a.md'}};
+  MemosView.prototype.openMoveMenu.call(view,memo,{});
+  assert.deepEqual(entries.map(e=>e.title),['private']);
+  await view.moveMemo(memo,'private');
+  assert.deepEqual(moved,['private']);
+  assert.equal(view.activeNotebookId,'default');
+});
