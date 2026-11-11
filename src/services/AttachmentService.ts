@@ -227,7 +227,7 @@ class VaultFileSuggestModal extends FuzzySuggestModal<TFile> {
 }
 
 function sanitizeFilename(name: string): string {
-  const sanitized = name.trim().replace(/[\\/:*?"<>|\u0000-\u001f]/g, "-").replace(/\s+/g, " ").replace(/[. ]+$/, "") || "attachment";
+  const sanitized = Array.from(name.trim(), char => char.charCodeAt(0) < 32 ? "-" : char).join("").replace(/[\\/:*?"<>|]/g, "-").replace(/\s+/g, " ").replace(/[. ]+$/, "") || "attachment";
   // Leave room for the timestamp and collision suffix on byte-limited file systems.
   const encoder = new TextEncoder();
   const ext = sanitized.match(/\.[a-zA-Z0-9]{1,16}$/)?.[0] ?? "";

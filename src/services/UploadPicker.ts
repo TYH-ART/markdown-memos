@@ -5,12 +5,12 @@ import { getDesktopDialog } from "./DesktopDialog";
 const selectedPaths = new WeakMap<File, string>();
 const lastFolderKey = "markdown-memos:last-upload-folder";
 
-export function getDesktopUploadPath(file: File): string {
+export async function getDesktopUploadPath(file: File): Promise<string> {
   if (!Platform.isDesktopApp) return "";
   const known = selectedPaths.get(file) || (file as File & { path?: string }).path;
   if (known) return known;
   try {
-    return require("electron").webUtils?.getPathForFile(file) ?? "";
+    return (await import("electron")).webUtils?.getPathForFile(file) ?? "";
   } catch {
     return "";
   }
@@ -24,17 +24,17 @@ export async function pickUploadFiles(app: App, accept: string, mimeFor: (name: 
     return pickBrowserFiles(app, filter, mobileSource === "camera");
   }
   if (accept === "*/*") {
-    const dialog = Platform.isDesktopApp ? getDesktopDialog() : undefined;
-    if (dialog) {
-      const saved = app.loadLocalStorage ? app.loadLocalStorage(lastFolderKey) : window.localStorage.getItem(lastFolderKey);
+    const dialog = Platform.isDesktopApp ? await getDesktopDialog() : undefined;
+    if (Platform.isDesktopApp && dialog) {
+      const saved: unknown = app.loadLocalStorage ? app.loadLocalStorage(lastFolderKey) : window.localStorage.getItem(lastFolderKey);
       const result = await dialog.showOpenDialog({
         title: "上传附件",
         properties: ["openFile", "multiSelections"],
         defaultPath: typeof saved === "string" ? saved : undefined,
       });
       if (result.canceled || !result.filePaths.length) return [];
-      const fs: typeof import("fs/promises") = require("fs/promises");
-      const path: typeof import("path") = require("path");
+      const fs: typeof import("fs/promises") = await import("fs/promises");
+      const path: typeof import("path") = await import("path");
       const dir = path.dirname(result.filePaths[0]);
       if (app.saveLocalStorage) app.saveLocalStorage(lastFolderKey, dir);
       else window.localStorage.setItem(lastFolderKey, dir);

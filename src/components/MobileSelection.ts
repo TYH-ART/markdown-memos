@@ -4,7 +4,7 @@ const textSelector = ".obsidian-memos-card__title, .obsidian-memos-card__content
 
 export function selectedWebUrl(text: string): string | undefined {
   const value = text.trim();
-  if (!/^https?:\/\//i.test(value) || /[\s\u0000-\u001f\\]/.test(value)) return;
+  if (!/^https?:\/\//i.test(value) || (/[\s\\]/.test(value) || Array.from(value).some(char => char.charCodeAt(0) < 32))) return;
   try {
     const url = new URL(value);
     if (url.hostname && !url.username && !url.password) return url.href;
@@ -175,7 +175,8 @@ export function bindMobileSelection(display: HTMLElement): () => void {
       paint();
     });
     selectAll.hidden = blank;
-    const open = button("打开网址", "external-link", async () => {
+    const open = button("打开网址", "external-link", () => {
+      void (async () => {
       const url = selectedWebUrl(selectedText());
       if (!url) return;
       close();
@@ -186,6 +187,7 @@ export function bindMobileSelection(display: HTMLElement): () => void {
         }
       } catch { /* Use Obsidian’s external link handler when the native bridge declines. */ }
       win.open(url, "_blank", "noopener,noreferrer");
+      })().catch(() => new Notice("打开网址失败，请重试"));
     });
     const grips = (["start", "end"] as const).map(initialEdge => {
       let edge = initialEdge;

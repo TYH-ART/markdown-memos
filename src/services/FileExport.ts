@@ -13,7 +13,7 @@ interface MobileFilePlugins {
 const downloadKey = "markdown-memos-download-folder";
 
 export function getDownloadFolder(app: App): string {
-  const value = app.loadLocalStorage ? app.loadLocalStorage(downloadKey)
+  const value: unknown = app.loadLocalStorage ? app.loadLocalStorage(downloadKey)
     : window.localStorage?.getItem(downloadKey + ":" + app.vault.getName());
   return typeof value === "string" ? value.trim() : "";
 }
@@ -23,14 +23,15 @@ export function setDownloadFolder(app: App, folder: string): void {
   else window.localStorage.setItem(downloadKey + ":" + app.vault.getName(), folder.trim());
 }
 
-function askDesktopPath(app: App, suggested: string): Promise<string | undefined> {
+async function askDesktopPath(app: App, suggested: string): Promise<string | undefined> {
+  if (!Platform.isDesktopApp) return;
+  const path = await import("path");
   return new Promise(resolve => {
     const modal = new Modal(app);
     modal.setTitle("选择下载位置");
     const input = modal.contentEl.createEl("input", { value: suggested, placeholder: "输入完整保存路径（包含文件名）" });
     const button = modal.contentEl.createEl("button", { text: "保存", cls: "mod-cta" });
     button.onclick = () => {
-      const path: typeof import("path") = require("path");
       if (!path.isAbsolute(input.value)) { new Notice("请输入包含文件名的绝对路径"); return; }
       resolve(input.value);
       modal.close();
@@ -41,8 +42,9 @@ function askDesktopPath(app: App, suggested: string): Promise<string | undefined
 }
 
 async function writeDesktopFile(app: App, folder: string, name: string, bytes: Uint8Array): Promise<string | undefined> {
-  const fs: typeof import("fs/promises") = require("fs/promises");
-  const path: typeof import("path") = require("path");
+  if (!Platform.isDesktopApp) return;
+  const fs: typeof import("fs/promises") = await import("fs/promises");
+  const path: typeof import("path") = await import("path");
   if (folder) {
     if (!path.isAbsolute(folder)) throw new Error("请在插件设置中填写绝对下载路径");
     await fs.mkdir(folder, { recursive: true });
@@ -57,7 +59,7 @@ async function writeDesktopFile(app: App, folder: string, name: string, bytes: U
       }
     }
   }
-  const dialog = getDesktopDialog();
+  const dialog = await getDesktopDialog();
   let dest: string | undefined;
   if (dialog) {
     const result = await dialog.showSaveDialog({ defaultPath: name, properties: ["showOverwriteConfirmation"] });
@@ -74,7 +76,7 @@ async function writeDesktopFile(app: App, folder: string, name: string, bytes: U
       new Notice(`已下载：${handle.name}`);
       return;
     }
-    const os: typeof import("os") = require("os");
+    const os: typeof import("os") = await import("os");
     dest = await askDesktopPath(app, path.join(os.homedir(), name));
   }
   if (dest) await fs.writeFile(dest, bytes, { flag: dialog ? "w" : "wx" });
@@ -123,11 +125,11 @@ function chooseMobileFolder(app: App, allowSystem: boolean): Promise<string | ty
 export async function exportBinaryFile(app: App, data: ArrayBuffer, name: string, mime: string): Promise<void> {
   const folder = getDownloadFolder(app);
   name = name.replace(/[\\/:*?"<>|]/g, "-").replace(/^[.]+$|[. ]+$/g, "") || "attachment";
-  if (Platform.isDesktop) {
+  if (Platform.isDesktopApp) {
     const bytes = new Uint8Array(data);
     const dest = await writeDesktopFile(app, folder, name, bytes);
     if (!dest) return;
-    const fs: typeof import("fs/promises") = require("fs/promises");
+    const fs: typeof import("fs/promises") = await import("fs/promises");
     const saved = await fs.readFile(dest);
     if (saved.length !== bytes.length || !saved.every((byte, index) => byte === bytes[index])) {
       throw new Error("导出文件校验失败，请重新下载");

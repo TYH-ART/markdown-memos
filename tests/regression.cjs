@@ -108,7 +108,7 @@ test('Desktop export preserves every binary byte including nulls and high bytes'
     const dest = path.join(dir, '中文附件.zip');
     const bytes = Uint8Array.from({ length: 65537 }, (_, i) => i % 256);
     const { exportBinaryFile } = load('src/services/FileExport.ts', {
-      obsidian: { Platform: { isDesktop: true }, Notice: class {} },
+      obsidian: { Platform: { isDesktopApp: true }, Notice: class {} },
       electron: { remote: { dialog: { showSaveDialog: async () => ({ filePath: dest }) } } },
     });
     await exportBinaryFile({}, bytes.buffer, '中文附件.zip', 'application/zip');
@@ -119,7 +119,7 @@ test('Configured desktop download folder saves without overwriting or loading El
   const dir = await mkdtemp(path.join(tmpdir(), 'memos-default-download-'));
   try {
     const { exportBinaryFile } = load('src/services/FileExport.ts', {
-      obsidian: { Platform: { isDesktop: true }, Notice: class {} },
+      obsidian: { Platform: { isDesktopApp: true }, Notice: class {} },
     });
     const app = { loadLocalStorage: () => dir };
     await exportBinaryFile(app, new Uint8Array([1]).buffer, 'report.pdf', '');
@@ -131,7 +131,7 @@ test('Configured desktop download folder saves without overwriting or loading El
 test('Canceling export never writes a file', async () => {
   let written = false;
   const { exportBinaryFile } = load('src/services/FileExport.ts', {
-    obsidian: { Platform: { isDesktop: true }, Notice: class {} },
+    obsidian: { Platform: { isDesktopApp: true }, Notice: class {} },
     electron: { remote: { dialog: { showSaveDialog: async () => ({ canceled: true }) } } },
     'fs/promises': { writeFile: () => { written = true; } },
   });
@@ -233,7 +233,7 @@ test('Desktop upload remembers the source directory across picks and preserves n
     'fs/promises': { readFile: async () => Uint8Array.from([0, 255, 1]) },
   });
   const [file] = await pickUploadFiles(app, '*/*', () => 'image/png');
-  assert.equal(getDesktopUploadPath(file), source);
+  assert.equal(await getDesktopUploadPath(file), source);
   assert.equal(file.type, 'image/png');
   assert.deepEqual([...new Uint8Array(await file.arrayBuffer())], [0, 255, 1]);
   cancel = true;
@@ -366,7 +366,7 @@ test('Upload, re-read the memo and download everyday file types without changing
     const environment = {
       obsidian: { normalizePath: path => path, TFile, TFolder, FuzzySuggestModal: class {},
         parseYaml: JSON.parse, stringifyYaml: JSON.stringify, Notice: class {},
-        Platform: { isDesktop: true, isDesktopApp: true } },
+        Platform: { isDesktopApp: true, isDesktopApp: true } },
       electron: { remote: { dialog: { showOpenDialog: async () => ({ filePaths: sources }) } } },
     };
     const app = { vault, metadataCache: { getFileCache: () => null }, loadLocalStorage: () => output, saveLocalStorage() {} };
@@ -624,4 +624,12 @@ test('Sidebar uses arrival order across clients despite stale manual ranks and i
   for (const input of [items, [...items].reverse()]) {
     assert.deepEqual(MemosView.prototype.sidebarOrder.call(view, input).map(m => m.file.path), ['pin', 'a', 'b', 'old']);
   }
+});
+
+test('Mobile never loads Electron for desktop dialogs or upload paths', async () => {
+  const overrides = { obsidian: { Platform: { isDesktopApp: false } } };
+  const { getDesktopDialog } = load('src/services/DesktopDialog.ts', overrides);
+  const { getDesktopUploadPath } = load('src/services/UploadPicker.ts', overrides);
+  assert.equal(await getDesktopDialog(), undefined);
+  assert.equal(await getDesktopUploadPath({ path: 'desktop-only' }), '');
 });

@@ -1,13 +1,14 @@
 {
   "name": "markdown-memos",
-  "version": "0.2.34",
+  "version": "0.2.35",
   "description": "A Memos-style quick capture view backed by one Markdown file per memo.",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "tsc --noEmit --skipLibCheck && node esbuild.config.mjs production",
     "check": "tsc --noEmit",
-    "test": "node --test tests/regression.cjs"
+    "test": "node --test tests/regression.cjs",
+    "lint": "eslint src"
   },
   "keywords": [
     "obsidian",
@@ -19,7 +20,10 @@
   "devDependencies": {
     "@types/node": "^24.3.0",
     "esbuild": "^0.25.9",
+    "eslint": "^9.39.5",
+    "eslint-plugin-obsidianmd": "^0.5.1",
     "obsidian": "^1.8.7",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.72.2"
   }
 }

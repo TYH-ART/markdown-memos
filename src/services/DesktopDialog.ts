@@ -1,4 +1,6 @@
-interface DesktopDialog {
+import { Platform } from "obsidian";
+
+export interface DesktopDialog {
   showSaveDialog(options: { defaultPath: string; properties: string[] }): Promise<{ canceled: boolean; filePath?: string }>;
   showOpenDialog(options: {
     title: string;
@@ -7,9 +9,10 @@ interface DesktopDialog {
   }): Promise<{ canceled: boolean; filePaths: string[] }>;
 }
 
-export function getDesktopDialog(): DesktopDialog | undefined {
+export async function getDesktopDialog(): Promise<DesktopDialog | undefined> {
+  if (!Platform.isDesktopApp) return;
   try {
-    const remote = require("electron").remote ?? require("@electron/remote");
+    const remote = (await import("electron")).remote ?? await import("@electron/remote");
     return remote.dialog;
   } catch {
     return undefined;

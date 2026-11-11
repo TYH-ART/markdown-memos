@@ -400,9 +400,9 @@ export class MemoComposer {
     }
     try {
       if (Platform.isDesktopApp) {
-        const path = getDesktopUploadPath(attachment.file);
+        const path = await getDesktopUploadPath(attachment.file);
         if (!path) throw new Error("请先保存这条备忘录，再用系统应用打开附件");
-        const message = await (require("electron") as { shell: { openPath(path: string): Promise<string> } }).shell.openPath(path);
+        const message = await (await import("electron")).shell.openPath(path);
         if (message) throw new Error(message);
       } else if (navigator.canShare?.({ files: [attachment.file] })) {
         await navigator.share({ files: [attachment.file], title: attachment.name });
